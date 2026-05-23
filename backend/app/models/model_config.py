@@ -16,7 +16,10 @@ class ProviderType(str, enum.Enum):
 class ModelRole(str, enum.Enum):
     continuation = "continuation"
     polishing = "polishing"
-    analysis = "analysis"
+    small_summary = "small_summary"
+    large_summary = "large_summary"
+    world_analysis = "world_analysis"
+    foreshadowing = "foreshadowing"
 
 
 class ModelConfig(Base):

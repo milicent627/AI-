@@ -94,7 +94,7 @@ export interface ModelConfig {
   name: string;
   provider: 'openai' | 'anthropic' | 'deepseek' | 'ollama';
   model_id: string;
-  role: 'continuation' | 'polishing' | 'analysis';
+  role: 'continuation' | 'polishing' | 'small_summary' | 'large_summary' | 'world_analysis' | 'foreshadowing';
   temperature: number;
   max_tokens: number;
   is_active: boolean;

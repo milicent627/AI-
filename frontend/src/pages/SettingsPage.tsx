@@ -13,7 +13,10 @@ const PROVIDERS = [
 const ROLES = [
   { value: 'continuation', label: '续写模型' },
   { value: 'polishing', label: '润色模型' },
-  { value: 'analysis', label: '分析模型' },
+  { value: 'small_summary', label: '小总结模型' },
+  { value: 'large_summary', label: '大总结模型' },
+  { value: 'world_analysis', label: '世界书分析模型' },
+  { value: 'foreshadowing', label: '伏笔检测模型' },
 ];
 
 export default function SettingsPage() {

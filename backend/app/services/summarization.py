@@ -72,7 +72,7 @@ class SummarizationService:
         combined = "\n\n".join(c.content for c in chapters if c.content)
         word_count_before = sum(c.word_count for c in chapters)
 
-        config = await self._get_analysis_config(db)
+        config = await self._get_small_summary_config(db)
         if not config:
             return None
 
@@ -107,7 +107,7 @@ class SummarizationService:
 
         summaries_text = "\n\n---\n\n".join(s.content for s in small_summaries)
 
-        config = await self._get_analysis_config(db)
+        config = await self._get_large_summary_config(db)
         if not config:
             return None
 
@@ -142,18 +142,30 @@ class SummarizationService:
         else:
             return await self._update_large_summary(db, story_id)
 
-    async def _get_analysis_config(self, db: AsyncSession) -> ModelConfig | None:
+    async def _get_small_summary_config(self, db: AsyncSession) -> ModelConfig | None:
         result = await db.execute(
             select(ModelConfig)
-            .where(ModelConfig.role == ModelRole.analysis, ModelConfig.is_active == True)
+            .where(ModelConfig.role == ModelRole.small_summary, ModelConfig.is_active == True)
             .limit(1)
         )
         config = result.scalar_one_or_none()
         if not config:
             result = await db.execute(
-                select(ModelConfig)
-                .where(ModelConfig.is_active == True)
-                .limit(1)
+                select(ModelConfig).where(ModelConfig.is_active == True).limit(1)
+            )
+            config = result.scalar_one_or_none()
+        return config
+
+    async def _get_large_summary_config(self, db: AsyncSession) -> ModelConfig | None:
+        result = await db.execute(
+            select(ModelConfig)
+            .where(ModelConfig.role == ModelRole.large_summary, ModelConfig.is_active == True)
+            .limit(1)
+        )
+        config = result.scalar_one_or_none()
+        if not config:
+            result = await db.execute(
+                select(ModelConfig).where(ModelConfig.is_active == True).limit(1)
             )
             config = result.scalar_one_or_none()
         return config

@@ -94,7 +94,7 @@ class ForeshadowingService:
     async def _get_analysis_config(self, db: AsyncSession) -> ModelConfig | None:
         result = await db.execute(
             select(ModelConfig)
-            .where(ModelConfig.role == ModelRole.analysis, ModelConfig.is_active == True)
+            .where(ModelConfig.role == ModelRole.foreshadowing, ModelConfig.is_active == True)
             .limit(1)
         )
         config = result.scalar_one_or_none()
