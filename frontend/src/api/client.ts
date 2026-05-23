@@ -208,6 +208,13 @@ export const api = {
   deleteSummary: (storyId: string, summaryId: string) =>
     request<any>(`/summaries/${storyId}/${summaryId}`, { method: 'DELETE' }),
 
+  // Prompt ordering
+  getOrder: (storyId: string, func: string) => request<{ items: any[] }>(`/stories/${storyId}/order?function=${func}`),
+  saveOrder: (storyId: string, func: string, items: any[]) =>
+    request<any>(`/stories/${storyId}/order`, { method: 'PUT', body: JSON.stringify({ function: func, items }) }),
+  seedOrder: (storyId: string, func: string) =>
+    request<any>(`/stories/${storyId}/order/seed`, { method: 'POST', body: JSON.stringify({ function: func }) }),
+
   // Models
   listModels: () => request<{ models: any[] }>('/models/'),
   createModel: (data: any) => request<any>('/models/', { method: 'POST', body: JSON.stringify(data) }),

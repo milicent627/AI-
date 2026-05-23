@@ -2,6 +2,7 @@ import { Routes, Route } from 'react-router-dom';
 import HomePage from './pages/HomePage';
 import EditorPage from './pages/EditorPage';
 import SettingsPage from './pages/SettingsPage';
+import PromptOrderPage from './pages/PromptOrderPage';
 
 export default function App() {
   return (
@@ -10,6 +11,7 @@ export default function App() {
         <Route path="/" element={<HomePage />} />
         <Route path="/editor/:storyId" element={<EditorPage />} />
         <Route path="/settings" element={<SettingsPage />} />
+        <Route path="/order/:storyId" element={<PromptOrderPage />} />
       </Routes>
     </div>
   );

@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from ..database import Base, create_engine, create_session_factory
-from ..models.story import Story, Chapter, ChapterStatus
+from ..models.story import Story, Chapter, ChapterStatus, PromptOrderItem
 from ..config import settings
 from pathlib import Path
 import json
@@ -175,3 +175,208 @@ async def delete_story(story_id: str):
     if story_dir.exists():
         shutil.rmtree(str(story_dir))
     return {"ok": True}
+
+
+# ── Prompt Ordering ──────────────────────────────────────────────
+
+CONTEXT_SLOT_KEYS = ["chapter_content", "world_book_injected", "recent_summaries", "large_summary", "style_guide", "active_foreshadowings"]
+FUNCTIONS = ["continuation", "polishing", "small_summary", "large_summary", "world_analysis", "foreshadowing"]
+
+
+@router.get("/{story_id}/order")
+async def get_order(story_id: str, function: str = "continuation"):
+    """Get ordered items for a function. Each item references a fragment, world entry, or context slot."""
+    engine = create_engine(
+        str(Path(settings.data_dir) / "archives" / story_id / "database.sqlite"))
+    session_factory = create_session_factory(engine)
+    try:
+        async with session_factory() as db:
+            result = await db.execute(
+                select(PromptOrderItem)
+                .where(PromptOrderItem.story_id == story_id, PromptOrderItem.function == function)
+                .order_by(PromptOrderItem.sort_order)
+            )
+            items = result.scalars().all()
+            return {
+                "items": [
+                    {
+                        "id": it.id,
+                        "story_id": it.story_id,
+                        "function": it.function,
+                        "sort_order": it.sort_order,
+                        "item_type": it.item_type,
+                        "role": it.role,
+                        "source_id": it.source_id,
+                        "preset_id": it.preset_id,
+                        "content_local": it.content_local,
+                        "is_active": it.is_active,
+                        "trigger_words": it.trigger_words,
+                        "trigger_logic": it.trigger_logic,
+                    }
+                    for it in items
+                ]
+            }
+    finally:
+        await engine.dispose()
+
+
+@router.put("/{story_id}/order")
+async def save_order(story_id: str, request: Request):
+    """Replace the entire ordering for a function. Body: { function, items: [...] }"""
+    data = await request.json()
+    func = data.get("function", "continuation")
+    items = data.get("items", [])
+
+    engine = create_engine(
+        str(Path(settings.data_dir) / "archives" / story_id / "database.sqlite"))
+    session_factory = create_session_factory(engine)
+    try:
+        async with session_factory() as db:
+            # Delete existing items for this function
+            existing = await db.execute(
+                select(PromptOrderItem).where(
+                    PromptOrderItem.story_id == story_id,
+                    PromptOrderItem.function == func,
+                )
+            )
+            for old in existing.scalars().all():
+                await db.delete(old)
+
+            # Insert new items
+            for i, item_data in enumerate(items):
+                it = PromptOrderItem(
+                    story_id=story_id,
+                    function=func,
+                    sort_order=i,
+                    item_type=item_data.get("item_type", "fragment"),
+                    role=item_data.get("role", "system"),
+                    source_id=item_data.get("source_id"),
+                    preset_id=item_data.get("preset_id"),
+                    content_local=item_data.get("content_local"),
+                    is_active=item_data.get("is_active", True),
+                    trigger_words=item_data.get("trigger_words"),
+                    trigger_logic=item_data.get("trigger_logic", "any"),
+                )
+                db.add(it)
+
+            await db.commit()
+            return {"ok": True, "count": len(items)}
+    finally:
+        await engine.dispose()
+
+
+@router.post("/{story_id}/order/seed")
+async def seed_order(story_id: str, request: Request):
+    """Auto-generate initial ordering from existing preset fragments + world entries for a function."""
+    data = await request.json()
+    func = data.get("function", "continuation")
+
+    engine = create_engine(
+        str(Path(settings.data_dir) / "archives" / story_id / "database.sqlite"))
+    session_factory = create_session_factory(engine)
+    try:
+        async with session_factory() as db:
+            # Check if order already exists
+            existing = await db.execute(
+                select(PromptOrderItem).where(
+                    PromptOrderItem.story_id == story_id,
+                    PromptOrderItem.function == func,
+                )
+            )
+            if existing.scalars().first():
+                return {"ok": True, "count": 0, "message": "Order already exists, skipping seed"}
+
+            order = 10
+            items_to_add = []
+
+            # Map function to prompt preset role
+            role_map = {
+                "continuation": "continuation_system",
+                "polishing": "polishing_system",
+                "small_summary": "small_summary_user",
+                "large_summary": "large_summary_user",
+                "world_analysis": "world_analysis_user",
+                "foreshadowing": "foreshadowing_user",
+            }
+            preset_role = role_map.get(func, "continuation_system")
+
+            # Load global preset fragments
+            index_engine_local = create_engine(
+                str(Path(settings.data_dir) / "index.sqlite"))
+            index_factory = create_session_factory(index_engine_local)
+            try:
+                async with index_factory() as idb:
+                    from app.models.prompt_preset import PromptPreset
+                    from app.models.prompt_fragment import PromptFragment
+                    presets_result = await idb.execute(
+                        select(PromptPreset).where(PromptPreset.role == preset_role)
+                    )
+                    for preset in presets_result.scalars().all():
+                        frags_result = await idb.execute(
+                            select(PromptFragment)
+                            .where(PromptFragment.preset_id == preset.id)
+                            .order_by(PromptFragment.sort_order)
+                        )
+                        for frag in frags_result.scalars().all():
+                            items_to_add.append(PromptOrderItem(
+                                story_id=story_id,
+                                function=func,
+                                sort_order=order,
+                                item_type="fragment",
+                                role="system" if func not in ("small_summary", "large_summary", "world_analysis", "foreshadowing") else "user",
+                                source_id=frag.id,
+                                preset_id=preset.id,
+                                is_active=frag.is_active,
+                            ))
+                            order += 10
+
+                await index_engine_local.dispose()
+            except Exception:
+                pass
+
+            # Add context slots
+            ctx_slots = []
+            if func == "continuation":
+                ctx_slots = [("style_guide", "system"), ("chapter_content", "user"), ("world_book_injected", "user"), ("recent_summaries", "user"), ("large_summary", "user"), ("active_foreshadowings", "system")]
+            elif func == "polishing":
+                ctx_slots = [("chapter_content", "user")]
+
+            for slot_key, slot_role in ctx_slots:
+                items_to_add.append(PromptOrderItem(
+                    story_id=story_id,
+                    function=func,
+                    sort_order=order,
+                    item_type="context_slot",
+                    role=slot_role,
+                    source_id=slot_key,
+                    is_active=True,
+                ))
+                order += 10
+
+            # Add world book entries
+            from app.models.world_book import WorldBookEntry
+            wb_result = await db.execute(
+                select(WorldBookEntry)
+                .where(WorldBookEntry.story_id == story_id, WorldBookEntry.status == "active")
+                .order_by(WorldBookEntry.sort_order)
+            )
+            for entry in wb_result.scalars().all():
+                items_to_add.append(PromptOrderItem(
+                    story_id=story_id,
+                    function=func,
+                    sort_order=order,
+                    item_type="world_entry",
+                    role="user",
+                    source_id=entry.id,
+                    is_active=True,
+                    trigger_words=[entry.name] + (entry.aliases or []),
+                ))
+                order += 10
+
+            for it in items_to_add:
+                db.add(it)
+            await db.commit()
+
+            return {"ok": True, "count": len(items_to_add)}
+    finally:
+        await engine.dispose()

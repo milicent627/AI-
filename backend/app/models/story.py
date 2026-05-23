@@ -1,6 +1,7 @@
 import uuid
 from datetime import datetime
-from sqlalchemy import String, Integer, Text, DateTime, Enum as SAEnum, ForeignKey
+from typing import Optional
+from sqlalchemy import String, Integer, Text, DateTime, Enum as SAEnum, ForeignKey, JSON
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from ..database import Base
 import enum
@@ -62,6 +63,26 @@ class Chapter(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
     story: Mapped["Story"] = relationship(back_populates="chapters")
+
+
+class PromptOrderItem(Base):
+    """Per-story global prompt ordering item. Lives in each story's SQLite."""
+    __tablename__ = "prompt_order_items"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    story_id: Mapped[str] = mapped_column(String(36), ForeignKey("stories.id"), nullable=False)
+    function: Mapped[str] = mapped_column(String(50), default="continuation")  # continuation, polishing, small_summary, large_summary, world_analysis, foreshadowing
+    sort_order: Mapped[int] = mapped_column(Integer, default=0)
+    item_type: Mapped[str] = mapped_column(String(30), default="fragment")  # fragment | world_entry | context_slot
+    role: Mapped[str] = mapped_column(String(10), default="system")  # system | user
+    source_id: Mapped[str | None] = mapped_column(String(36), nullable=True)  # fragment_id, entry_id, or slot key
+    preset_id: Mapped[str | None] = mapped_column(String(36), nullable=True)  # only for fragment type
+    content_local: Mapped[str | None] = mapped_column(Text, nullable=True)  # null = use source content
+    is_active: Mapped[bool] = mapped_column(default=True)
+    trigger_words: Mapped[list | None] = mapped_column(JSON, nullable=True)  # only for world_entry type
+    trigger_logic: Mapped[str] = mapped_column(String(10), default="any")  # any=OR, all=AND
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
 
 class ContinuationRecord(Base):

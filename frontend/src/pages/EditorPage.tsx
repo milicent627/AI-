@@ -5,7 +5,7 @@ import { useStoryStore } from '../stores/storyStore';
 import type { Chapter, WorldBookEntry, Foreshadowing, Summary } from '../types';
 import {
   ArrowLeft, Send, GitBranch, Sparkles, BookOpen, Users, Eye, EyeOff, FileText,
-  ChevronDown, Save, Wand2, MessageSquare, X, Download, Upload, Plus, Edit3, ChevronUp, Trash2
+  ChevronDown, Save, Wand2, MessageSquare, X, Download, Upload, Plus, Edit3, ChevronUp, Trash2, ListOrdered
 } from 'lucide-react';
 
 export default function EditorPage() {
@@ -636,6 +636,10 @@ export default function EditorPage() {
           <button onClick={() => setActivePanel(activePanel === 'assist' ? 'chapters' : 'assist')}
             className={`px-2 py-1 text-xs border rounded hover:bg-gray-800 flex items-center gap-1 ${activePanel === 'assist' ? 'border-purple-600 bg-purple-900/30' : 'border-gray-700'}`}>
             <MessageSquare size={14} /> AI助手
+          </button>
+          <button onClick={() => navigate(`/order/${storyId}`)}
+            className="px-2 py-1 text-xs border border-gray-700 rounded hover:bg-gray-800 flex items-center gap-1">
+            <ListOrdered size={14} /> 排序
           </button>
           <button onClick={saveChapter} className="px-3 py-1 text-xs bg-green-700 rounded hover:bg-green-600 flex items-center gap-1">
             <Save size={14} /> 保存
