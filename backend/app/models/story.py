@@ -32,6 +32,7 @@ class Story(Base):
     small_summary_chapter_count: Mapped[int] = mapped_column(Integer, default=10)
     large_summary_merge_count: Mapped[int] = mapped_column(Integer, default=3)
     auto_hide_summarized: Mapped[bool] = mapped_column(default=True)
+    world_book_name: Mapped[str] = mapped_column(String(200), default="")
     status: Mapped[StoryStatus] = mapped_column(SAEnum(StoryStatus), default=StoryStatus.ongoing)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)

@@ -9,6 +9,7 @@ export interface Story {
   small_summary_chapter_count: number;
   large_summary_merge_count: number;
   auto_hide_summarized: boolean;
+  world_book_name: string;
   current_total_words: number;
   status: 'ongoing' | 'completed' | 'paused';
   chapters_count?: number;

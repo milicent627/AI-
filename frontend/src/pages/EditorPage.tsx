@@ -356,6 +356,19 @@ export default function EditorPage() {
       case 'world':
         return (
           <div className="space-y-1.5">
+            <div className="mb-2">
+              <input
+                className="w-full bg-transparent text-sm font-bold border-b border-transparent hover:border-gray-700 focus:border-blue-600 outline-none px-1 py-0.5"
+                value={currentStory?.world_book_name || ''}
+                placeholder={currentStory?.title ? `${currentStory.title} 世界书` : '世界书名称'}
+                onChange={async (e) => {
+                  if (!storyId || !currentStory) return;
+                  const newName = e.target.value;
+                  setCurrentStory({ ...currentStory, world_book_name: newName });
+                  await api.updateStory(storyId, { world_book_name: newName });
+                }}
+              />
+            </div>
             <button
               onClick={() => { setShowNewEntry(!showNewEntry); resetEntryForm(); setEditingEntryId(null); }}
               className="w-full flex items-center justify-center gap-1 px-2 py-1.5 text-xs border border-dashed border-gray-700 rounded-lg hover:border-blue-600 hover:text-blue-400 text-gray-500 mb-2"

@@ -92,6 +92,7 @@ async def create_story(request: Request):
             small_summary_chapter_count=data.get("small_summary_chapter_count", 10),
             large_summary_merge_count=data.get("large_summary_merge_count", 3),
             auto_hide_summarized=data.get("auto_hide_summarized", True),
+            world_book_name=data.get("world_book_name", ""),
         )
         db.add(story)
 
@@ -133,6 +134,7 @@ async def get_story(story_id: str):
             "large_summary_merge_count": story.large_summary_merge_count,
             "auto_hide_summarized": story.auto_hide_summarized,
             "current_total_words": story.current_total_words,
+            "world_book_name": story.world_book_name or "",
             "status": story.status.value,
             "created_at": story.created_at.isoformat(),
             "updated_at": story.updated_at.isoformat(),
@@ -156,7 +158,8 @@ async def update_story(story_id: str, request: Request):
 
         for field in ["title", "author", "genre", "synopsis", "style_guide",
                        "target_chapter_words", "small_summary_chapter_count",
-                       "large_summary_merge_count", "auto_hide_summarized", "status"]:
+                       "large_summary_merge_count", "auto_hide_summarized", "status",
+                       "world_book_name"]:
             if field in data:
                 setattr(story, field, data[field])
 
