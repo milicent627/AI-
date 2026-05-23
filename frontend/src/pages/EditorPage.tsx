@@ -72,6 +72,25 @@ export default function EditorPage() {
     setSaveStatus('saved');
   }, [storyId, currentChapter, saveStatus]);
 
+  // WebSocket for analysis notifications
+  useEffect(() => {
+    if (!storyId) return;
+    const protocol = window.location.protocol === 'https:' ? 'wss' : 'ws';
+    const host = window.location.host;
+    const ws = new WebSocket(`${protocol}://${host}/api/continuation/ws/${storyId}`);
+
+    ws.onmessage = (event) => {
+      const msg = JSON.parse(event.data);
+      if (msg.event === 'analysis_complete') {
+        api.listWorldEntries(storyId!).then(d => setWorldEntries(d.entries || [])).catch(() => {});
+        api.listForeshadowings(storyId!).then(d => setForeshadowings(d.foreshadowings || [])).catch(() => {});
+        api.listSummaries(storyId!).then(d => setSummaries(d.summaries || [])).catch(() => {});
+      }
+    };
+
+    return () => ws.close();
+  }, [storyId]);
+
   // Auto-save every 5 seconds
   useEffect(() => {
     if (saveStatus !== 'unsaved') return;
@@ -130,9 +149,6 @@ export default function EditorPage() {
         setContent(prev => prev + '\n\n' + collected);
         setStreamingText('');
         api.listChapters(storyId!).then(d => setChapters(d.chapters || [])).catch(() => {});
-        api.listWorldEntries(storyId!).then(d => setWorldEntries(d.entries || [])).catch(() => {});
-        api.listForeshadowings(storyId!).then(d => setForeshadowings(d.foreshadowings || [])).catch(() => {});
-        api.listSummaries(storyId!).then(d => setSummaries(d.summaries || [])).catch(() => {});
       },
       (err) => {
         setIsStreaming(false);

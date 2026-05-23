@@ -1,6 +1,7 @@
 import sys
+import asyncio
 from pathlib import Path
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, Request, WebSocket, WebSocketDisconnect
 from fastapi.responses import StreamingResponse
 from sqlalchemy import select
 
@@ -15,6 +16,7 @@ from app.services.world_analysis import WorldAnalysisService
 from app.services.summarization import SummarizationService
 from app.services.foreshadowing import ForeshadowingService
 from app.services.polishing import PolishingService
+from app.services.websocket_manager import ws_manager
 from app.utils.text_utils import count_chinese_words
 from app.config import settings
 
@@ -24,6 +26,38 @@ registry = ProviderRegistry()
 
 def _get_db_path(story_id: str) -> str:
     return str(Path(settings.data_dir) / "archives" / story_id / "database.sqlite")
+
+
+async def _run_post_processing(story_id: str, chapter_id: str):
+    """Run world analysis, summarization, and foreshadowing detection asynchronously."""
+    try:
+        engine = create_engine(_get_db_path(story_id))
+        session_factory = create_session_factory(engine)
+        async with session_factory() as db:
+            analyzer = WorldAnalysisService(registry)
+            await analyzer.analyze_chapter(db, story_id, chapter_id)
+
+            summarizer = SummarizationService(registry)
+            await summarizer.check_and_summarize(db, story_id)
+
+            fp_service = ForeshadowingService(registry)
+            await fp_service.detect_in_chapter(db, story_id, chapter_id)
+
+        await ws_manager.notify(story_id, "analysis_complete", {
+            "chapter_id": chapter_id,
+        })
+    except Exception as e:
+        await ws_manager.notify(story_id, "analysis_error", {"error": str(e)})
+
+
+@router.websocket("/ws/{story_id}")
+async def websocket_endpoint(ws: WebSocket, story_id: str):
+    await ws_manager.connect(story_id, ws)
+    try:
+        while True:
+            await ws.receive_text()
+    except WebSocketDisconnect:
+        ws_manager.disconnect(story_id, ws)
 
 
 @router.post("/stream")
@@ -50,7 +84,6 @@ async def continue_story_stream(request: Request):
                 ):
                     collected += chunk
                     yield f"data: {chunk}\n\n"
-                yield "data: [DONE]\n\n"
 
                 chapter = await db.get(Chapter, chapter_id)
                 if chapter:
@@ -61,14 +94,10 @@ async def continue_story_stream(request: Request):
                 splitter = ChapterSplitService(settings.data_dir)
                 await splitter.check_and_split(db, story_id, chapter_id)
 
-                analyzer = WorldAnalysisService(registry)
-                await analyzer.analyze_chapter(db, story_id, chapter_id)
+                yield f"data: [DONE]\n\n"
 
-                summarizer = SummarizationService(registry)
-                await summarizer.check_and_summarize(db, story_id)
+            asyncio.create_task(_run_post_processing(story_id, chapter_id))
 
-                fp_service = ForeshadowingService(registry)
-                await fp_service.detect_in_chapter(db, story_id, chapter_id)
         except Exception as e:
             yield f"data: [ERROR] {str(e)}\n\n"
         finally:
