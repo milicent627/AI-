@@ -5,7 +5,7 @@ import { useStoryStore } from '../stores/storyStore';
 import type { Chapter, WorldBookEntry, Foreshadowing, Summary } from '../types';
 import {
   ArrowLeft, Send, GitBranch, Sparkles, BookOpen, Users, Eye, FileText,
-  ChevronDown, Save, Wand2, MessageSquare, X
+  ChevronDown, Save, Wand2, MessageSquare, X, Download, Upload
 } from 'lucide-react';
 
 export default function EditorPage() {
@@ -38,6 +38,25 @@ export default function EditorPage() {
   const chatAbortRef = useRef<AbortController | null>(null);
   const chatEndRef = useRef<HTMLDivElement>(null);
   const chatContentRef = useRef('');
+  const worldImportRef = useRef<HTMLInputElement>(null);
+
+  const handleWorldExport = () => {
+    if (!storyId) return;
+    api.exportWorldBook(storyId).catch(err => alert(`导出失败: ${err.message}`));
+  };
+
+  const handleWorldImport = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (!storyId || !e.target.files?.length) return;
+    try {
+      const result = await api.importWorldBook(storyId, e.target.files[0]);
+      alert(`导入完成：新增 ${result.imported} 条，更新 ${result.updated} 条，关系 ${result.relations_imported} 条`);
+      const d = await api.listWorldEntries(storyId);
+      setWorldEntries(d.entries || []);
+    } catch (err: any) {
+      alert(`导入失败: ${err.message}`);
+    }
+    e.target.value = '';
+  };
 
   const contentRef = useRef(content);
   contentRef.current = content;
@@ -284,6 +303,16 @@ export default function EditorPage() {
               </details>
             ))}
             {worldEntries.length === 0 && <p className="text-gray-600 text-sm p-3">暂无世界书条目，续写后自动分析</p>}
+            <div className="flex gap-1 mt-3 pt-3 border-t border-gray-800">
+              <button onClick={handleWorldExport}
+                className="flex items-center gap-1 px-2 py-1 text-xs bg-gray-800 border border-gray-700 rounded hover:bg-gray-700">
+                <Download size={12} /> 导出
+              </button>
+              <button onClick={() => worldImportRef.current?.click()}
+                className="flex items-center gap-1 px-2 py-1 text-xs bg-gray-800 border border-gray-700 rounded hover:bg-gray-700">
+                <Upload size={12} /> 导入
+              </button>
+            </div>
           </div>
         );
       case 'foreshadowing':
@@ -374,6 +403,8 @@ export default function EditorPage() {
 
   return (
     <div className="h-screen flex flex-col">
+      <input type="file" ref={worldImportRef} onChange={handleWorldImport} accept=".json" className="hidden" />
+
       {/* Toolbar */}
       <header className="border-b border-gray-800 px-4 py-2 flex items-center justify-between shrink-0">
         <div className="flex items-center gap-3">

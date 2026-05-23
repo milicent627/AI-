@@ -1,10 +1,12 @@
 import sys
+import uuid
+from datetime import datetime, timezone
 from pathlib import Path
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, HTTPException, Request, UploadFile, File
 from fastapi.responses import StreamingResponse
 from sqlalchemy import select
 from app.database import create_engine, create_session_factory
-from app.models.world_book import WorldBookEntry, CharacterRelation, EntryCategory
+from app.models.world_book import WorldBookEntry, CharacterRelation, EntryCategory, EntryStatus
 from app.models.model_config import ModelRole
 from app.config import settings
 
@@ -246,3 +248,171 @@ async def assist_stream(story_id: str, request: Request):
             await engine.dispose()
 
     return StreamingResponse(event_stream(), media_type="text/event-stream")
+
+
+@router.get("/{story_id}/export")
+async def export_world_book(story_id: str):
+    engine = create_engine(_get_db_path(story_id))
+    session_factory = create_session_factory(engine)
+    try:
+        async with session_factory() as db:
+            result = await db.execute(
+                select(WorldBookEntry)
+                .where(WorldBookEntry.story_id == story_id)
+                .order_by(WorldBookEntry.category, WorldBookEntry.importance.desc())
+            )
+            entries = result.scalars().all()
+
+            rel_result = await db.execute(
+                select(CharacterRelation)
+                .where(CharacterRelation.story_id == story_id)
+            )
+            relations = rel_result.scalars().all()
+
+            export_data = {
+                "version": 1,
+                "type": "bookwright_world_book",
+                "exported_at": datetime.now(timezone.utc).isoformat(),
+                "entries": [
+                    {
+                        "category": e.category.value,
+                        "name": e.name,
+                        "description": e.description,
+                        "aliases": e.aliases,
+                        "attributes": e.attributes,
+                        "importance": e.importance,
+                        "sort_order": e.sort_order,
+                        "status": e.status.value if e.status else "active",
+                        "version": e.version,
+                    }
+                    for e in entries
+                ],
+                "relations": [
+                    {
+                        "source_char_name": "",
+                        "target_char_name": "",
+                        "relation_type": r.relation_type,
+                        "description": r.description,
+                        "intensity": r.intensity,
+                    }
+                    for r in relations
+                ],
+            }
+
+            # Resolve character names for relations
+            name_map = {e.id: e.name for e in entries}
+            for i, r in enumerate(relations):
+                export_data["relations"][i]["source_char_name"] = name_map.get(r.source_char_id, "")
+                export_data["relations"][i]["target_char_name"] = name_map.get(r.target_char_id, "")
+
+            from fastapi.responses import Response
+            import json
+            return Response(
+                content=json.dumps(export_data, ensure_ascii=False, indent=2),
+                media_type="application/json",
+                headers={"Content-Disposition": f"attachment; filename=world_book_{story_id}.json"},
+            )
+    finally:
+        await engine.dispose()
+
+
+@router.post("/{story_id}/import")
+async def import_world_book(story_id: str, file: UploadFile = File(...)):
+    import json
+    content = await file.read()
+    try:
+        import_data = json.loads(content)
+    except json.JSONDecodeError:
+        raise HTTPException(status_code=400, detail="无效的 JSON 文件")
+
+    if import_data.get("type") != "bookwright_world_book":
+        raise HTTPException(status_code=400, detail="不是有效的 BookWright 世界书导出文件")
+
+    engine = create_engine(_get_db_path(story_id))
+    session_factory = create_session_factory(engine)
+    try:
+        async with session_factory() as db:
+            # Build existing name+category index
+            existing_result = await db.execute(
+                select(WorldBookEntry).where(WorldBookEntry.story_id == story_id)
+            )
+            existing_entries = existing_result.scalars().all()
+            existing_index = {(e.name, e.category.value): e for e in existing_entries}
+
+            imported_count = 0
+            updated_count = 0
+            new_entries = {}  # name -> new entry for relation mapping
+
+            for entry_data in import_data.get("entries", []):
+                key = (entry_data["name"], entry_data.get("category", "custom"))
+                if key in existing_index:
+                    e = existing_index[key]
+                    updated_count += 1
+                else:
+                    e = WorldBookEntry(
+                        id=str(uuid.uuid4()),
+                        story_id=story_id,
+                    )
+                    db.add(e)
+                    imported_count += 1
+
+                e.category = EntryCategory(entry_data.get("category", "custom"))
+                e.name = entry_data.get("name", "")
+                e.description = entry_data.get("description", "")
+                e.aliases = entry_data.get("aliases", [])
+                e.attributes = entry_data.get("attributes", {})
+                e.importance = entry_data.get("importance", 3)
+                e.sort_order = entry_data.get("sort_order", 0)
+                e.status = EntryStatus(entry_data.get("status", "active"))
+                e.version = entry_data.get("version", 1)
+                new_entries[e.name] = e
+
+            await db.commit()
+
+            # Import relations
+            rel_count = 0
+            for rel_data in import_data.get("relations", []):
+                src = new_entries.get(rel_data.get("source_char_name", ""))
+                tgt = new_entries.get(rel_data.get("target_char_name", ""))
+                if not src:
+                    src_result = await db.execute(
+                        select(WorldBookEntry).where(
+                            WorldBookEntry.story_id == story_id,
+                            WorldBookEntry.name == rel_data.get("source_char_name", ""),
+                            WorldBookEntry.category == EntryCategory.character,
+                        )
+                    )
+                    src = src_result.scalar_one_or_none()
+                if not tgt:
+                    tgt_result = await db.execute(
+                        select(WorldBookEntry).where(
+                            WorldBookEntry.story_id == story_id,
+                            WorldBookEntry.name == rel_data.get("target_char_name", ""),
+                            WorldBookEntry.category == EntryCategory.character,
+                        )
+                    )
+                    tgt = tgt_result.scalar_one_or_none()
+
+                if src and tgt:
+                    rel = CharacterRelation(
+                        id=str(uuid.uuid4()),
+                        story_id=story_id,
+                        source_char_id=src.id,
+                        target_char_id=tgt.id,
+                        relation_type=rel_data.get("relation_type", ""),
+                        description=rel_data.get("description", ""),
+                        intensity=rel_data.get("intensity", 5),
+                    )
+                    db.add(rel)
+                    rel_count += 1
+
+            await db.commit()
+
+            return {
+                "ok": True,
+                "imported": imported_count,
+                "updated": updated_count,
+                "relations_imported": rel_count,
+            }
+    finally:
+        await engine.dispose()

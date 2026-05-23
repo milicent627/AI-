@@ -141,6 +141,47 @@ export const api = {
     return controller;
   },
 
+  // World Book import/export
+  exportWorldBook: async (storyId: string) => {
+    const res = await fetch(`${BASE}/world-book/${storyId}/export`);
+    if (!res.ok) throw new Error('Export failed');
+    const blob = await res.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `world_book_${storyId}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+  },
+  importWorldBook: async (storyId: string, file: File) => {
+    const form = new FormData();
+    form.append('file', file);
+    const res = await fetch(`${BASE}/world-book/${storyId}/import`, { method: 'POST', body: form });
+    if (!res.ok) { const err = await res.text(); throw new Error(err); }
+    return res.json();
+  },
+
+  // Prompt Presets import/export
+  exportPromptPresets: async (role?: string) => {
+    const url = `${BASE}/prompt-presets/export-data${role ? `?role=${role}` : ''}`;
+    const res = await fetch(url);
+    if (!res.ok) throw new Error('Export failed');
+    const blob = await res.blob();
+    const url2 = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url2;
+    a.download = 'prompt_presets.json';
+    a.click();
+    URL.revokeObjectURL(url2);
+  },
+  importPromptPresets: async (file: File) => {
+    const form = new FormData();
+    form.append('file', file);
+    const res = await fetch(`${BASE}/prompt-presets/import-data`, { method: 'POST', body: form });
+    if (!res.ok) { const err = await res.text(); throw new Error(err); }
+    return res.json();
+  },
+
   // Foreshadowing
   listForeshadowings: (storyId: string, status?: string) =>
     request<{ foreshadowings: any[] }>(`/foreshadowing/${storyId}${status ? `?status=${status}` : ''}`),

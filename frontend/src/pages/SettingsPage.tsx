@@ -1,8 +1,8 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { api } from '../api/client';
 import type { ModelConfig, PromptPreset } from '../types';
-import { ArrowLeft, Plus, Trash2, Check, Save, Copy, ChevronDown, ChevronUp, GripVertical, EyeOff, Eye } from 'lucide-react';
+import { ArrowLeft, Plus, Trash2, Check, Save, Copy, ChevronDown, ChevronUp, GripVertical, EyeOff, Eye, Download, Upload } from 'lucide-react';
 
 const PROVIDERS = [
   { value: 'openai', label: 'OpenAI', models: ['gpt-4o', 'gpt-4o-mini', 'gpt-4-turbo', 'gpt-3.5-turbo'] },
@@ -128,10 +128,35 @@ export default function SettingsPage() {
     setPromptPresets(promptPresets.filter(p => p.id !== id));
   };
 
+  const refreshPrompts = async () => {
+    const d = await api.listPromptPresets();
+    setPromptPresets(d.presets || []);
+  };
+
+  const handlePromptExport = () => {
+    api.exportPromptPresets().catch(err => alert(`导出失败: ${err.message}`));
+  };
+
+  const promptImportRef = useRef<HTMLInputElement>(null);
+
+  const handlePromptImport = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (!e.target.files?.length) return;
+    try {
+      const result = await api.importPromptPresets(e.target.files[0]);
+      alert(`导入完成：新增 ${result.imported} 个预设，更新 ${result.updated} 个预设`);
+      refreshPrompts();
+    } catch (err: any) {
+      alert(`导入失败: ${err.message}`);
+    }
+    e.target.value = '';
+  };
+
   const providerModels = PROVIDERS.find(p => p.value === form.provider)?.models || [];
 
   return (
     <div className="flex-1 flex flex-col max-w-3xl mx-auto w-full p-6">
+      <input type="file" ref={promptImportRef} onChange={handlePromptImport} accept=".json" className="hidden" />
+
       <div className="flex items-center gap-3 mb-6">
         <button onClick={() => navigate(-1)} className="p-1 hover:bg-gray-800 rounded"><ArrowLeft size={18} /></button>
         <h1 className="text-xl font-bold">设置</h1>
@@ -285,7 +310,19 @@ export default function SettingsPage() {
 
           {/* Prompt presets with fragments */}
           <div className="space-y-3">
-            <h2 className="font-bold text-sm text-gray-400 uppercase tracking-wider">提示词预设</h2>
+            <div className="flex items-center justify-between">
+              <h2 className="font-bold text-sm text-gray-400 uppercase tracking-wider">提示词预设</h2>
+              <div className="flex gap-1">
+                <button onClick={handlePromptExport}
+                  className="flex items-center gap-1 px-2 py-1 text-xs bg-gray-800 border border-gray-700 rounded hover:bg-gray-700">
+                  <Download size={12} /> 导出
+                </button>
+                <button onClick={() => promptImportRef.current?.click()}
+                  className="flex items-center gap-1 px-2 py-1 text-xs bg-gray-800 border border-gray-700 rounded hover:bg-gray-700">
+                  <Upload size={12} /> 导入
+                </button>
+              </div>
+            </div>
             {promptPresets.map(p => {
               const isExpanded = expandedPreset === p.id;
               return (

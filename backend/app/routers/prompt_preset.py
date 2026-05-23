@@ -1,7 +1,10 @@
 import uuid
+import json as json_module
+from datetime import datetime, timezone
 from pathlib import Path
-from fastapi import APIRouter, HTTPException, Request
-from sqlalchemy import select
+from fastapi import APIRouter, HTTPException, Request, UploadFile, File
+from fastapi.responses import Response
+from sqlalchemy import select, delete as sa_delete
 from app.database import Base, create_engine, create_session_factory
 from app.models.prompt_preset import PromptPreset, PromptRole
 from app.models.prompt_fragment import PromptFragment
@@ -251,5 +254,124 @@ async def reorder_fragments(preset_id: str, request: Request):
                     frag.sort_order = i
             await db.commit()
             return {"ok": True}
+    finally:
+        await engine.dispose()
+
+
+@router.get("/export-data")
+async def export_presets(role: str = ""):
+    engine = await _ensure_db()
+    session_factory = create_session_factory(engine)
+    try:
+        async with session_factory() as db:
+            await seed_defaults(db)
+            await db.commit()
+
+            query = select(PromptPreset)
+            if role:
+                query = query.where(PromptPreset.role == role)
+            query = query.order_by(PromptPreset.role, PromptPreset.created_at.desc())
+            result = await db.execute(query)
+            presets = result.scalars().all()
+
+            export_data = {
+                "version": 1,
+                "type": "bookwright_prompt_presets",
+                "exported_at": datetime.now(timezone.utc).isoformat(),
+                "presets": [],
+            }
+
+            for p in presets:
+                frag_result = await db.execute(
+                    select(PromptFragment).where(PromptFragment.preset_id == p.id).order_by(PromptFragment.sort_order)
+                )
+                fragments = frag_result.scalars().all()
+                export_data["presets"].append({
+                    "name": p.name,
+                    "role": p.role.value,
+                    "content": p.content,
+                    "is_default": p.is_default,
+                    "fragments": [
+                        {"content": f.content, "sort_order": f.sort_order, "is_active": f.is_active}
+                        for f in fragments
+                    ],
+                })
+
+            return Response(
+                content=json_module.dumps(export_data, ensure_ascii=False, indent=2),
+                media_type="application/json",
+                headers={"Content-Disposition": "attachment; filename=prompt_presets.json"},
+            )
+    finally:
+        await engine.dispose()
+
+
+@router.post("/import-data")
+async def import_presets(file: UploadFile = File(...)):
+    content = await file.read()
+    try:
+        import_data = json_module.loads(content)
+    except json_module.JSONDecodeError:
+        raise HTTPException(status_code=400, detail="无效的 JSON 文件")
+
+    if import_data.get("type") != "bookwright_prompt_presets":
+        raise HTTPException(status_code=400, detail="不是有效的 BookWright 提示词预设导出文件")
+
+    engine = await _ensure_db()
+    session_factory = create_session_factory(engine)
+    try:
+        async with session_factory() as db:
+            # Build existing index: (name, role) → preset
+            existing_result = await db.execute(select(PromptPreset))
+            existing_presets = existing_result.scalars().all()
+            existing_index = {(p.name, p.role): p for p in existing_presets}
+
+            imported_count = 0
+            updated_count = 0
+
+            for preset_data in import_data.get("presets", []):
+                role = PromptRole(preset_data["role"])
+                key = (preset_data["name"], role)
+                is_default = preset_data.get("is_default", False)
+
+                if key in existing_index and not is_default:
+                    preset = existing_index[key]
+                    updated_count += 1
+                    # Delete old fragments
+                    await db.execute(
+                        sa_delete(PromptFragment).where(PromptFragment.preset_id == preset.id)
+                    )
+                elif key in existing_index and is_default:
+                    preset = existing_index[key]
+                    # Update default preset fragments
+                    await db.execute(
+                        sa_delete(PromptFragment).where(PromptFragment.preset_id == preset.id)
+                    )
+                else:
+                    preset = PromptPreset(
+                        id=str(uuid.uuid4()),
+                        name=preset_data["name"],
+                        role=role,
+                        content=preset_data.get("content", ""),
+                        is_default=is_default,
+                    )
+                    db.add(preset)
+                    await db.flush()
+                    imported_count += 1
+
+                for frag_data in preset_data.get("fragments", []):
+                    db.add(PromptFragment(
+                        preset_id=preset.id,
+                        content=frag_data.get("content", ""),
+                        sort_order=frag_data.get("sort_order", 0),
+                        is_active=frag_data.get("is_active", True),
+                    ))
+
+            await db.commit()
+            return {
+                "ok": True,
+                "imported": imported_count,
+                "updated": updated_count,
+            }
     finally:
         await engine.dispose()
