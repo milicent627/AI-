@@ -6,6 +6,9 @@ export interface Story {
   synopsis: string;
   style_guide: string;
   target_chapter_words: number;
+  small_summary_chapter_count: number;
+  large_summary_merge_count: number;
+  auto_hide_summarized: boolean;
   current_total_words: number;
   status: 'ongoing' | 'completed' | 'paused';
   chapters_count?: number;
@@ -21,6 +24,7 @@ export interface Chapter {
   word_count: number;
   status: 'draft' | 'polished' | 'archived';
   is_archived: boolean;
+  hidden: boolean;
   branch_name: string;
   parent_chapter_id: string | null;
   created_at: string;

@@ -1,0 +1,32 @@
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select
+from ..models.model_config import ModelConfig, ModelRole
+
+
+async def get_model_config(db: AsyncSession, primary_role: ModelRole) -> ModelConfig | None:
+    """Get model config with fallback chain: specific role → continuation → any active."""
+    result = await db.execute(
+        select(ModelConfig)
+        .where(ModelConfig.role == primary_role, ModelConfig.is_active == True)
+        .limit(1)
+    )
+    config = result.scalar_one_or_none()
+    if config:
+        return config
+
+    if primary_role != ModelRole.continuation:
+        result = await db.execute(
+            select(ModelConfig)
+            .where(ModelConfig.role == ModelRole.continuation, ModelConfig.is_active == True)
+            .limit(1)
+        )
+        config = result.scalar_one_or_none()
+        if config:
+            return config
+
+    result = await db.execute(
+        select(ModelConfig)
+        .where(ModelConfig.is_active == True)
+        .limit(1)
+    )
+    return result.scalar_one_or_none()

@@ -45,6 +45,7 @@ class ContinuationService:
             .where(
                 Chapter.story_id == story_id,
                 Chapter.is_archived == True,
+                Chapter.hidden == False,
             )
             .order_by(Chapter.chapter_number.desc())
             .limit(1)
@@ -163,14 +164,10 @@ class ContinuationService:
             {"role": "user", "content": user_prompt},
         ]
 
-        result = await db.execute(
-            select(ModelConfig)
-            .where(ModelConfig.role == ModelRole.continuation, ModelConfig.is_active == True)
-            .limit(1)
-        )
-        config = result.scalar_one_or_none()
+        from ..utils.model_fallback import get_model_config
+        config = await get_model_config(db, ModelRole.continuation)
         if not config:
-            raise ValueError("No active continuation model configured. Please set up a model in settings.")
+            raise ValueError("No continuation model configured. Please set up a model in settings.")
 
         provider = self.registry.get_or_create(config)
 

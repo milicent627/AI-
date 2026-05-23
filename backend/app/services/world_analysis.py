@@ -211,15 +211,5 @@ class WorldAnalysisService:
         return json.loads(text)
 
     async def _get_analysis_config(self, db: AsyncSession) -> ModelConfig | None:
-        result = await db.execute(
-            select(ModelConfig)
-            .where(ModelConfig.role == ModelRole.world_analysis, ModelConfig.is_active == True)
-            .limit(1)
-        )
-        config = result.scalar_one_or_none()
-        if not config:
-            result = await db.execute(
-                select(ModelConfig).where(ModelConfig.is_active == True).limit(1)
-            )
-            config = result.scalar_one_or_none()
-        return config
+        from ..utils.model_fallback import get_model_config
+        return await get_model_config(db, ModelRole.world_analysis)

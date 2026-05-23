@@ -89,6 +89,9 @@ async def create_story(request: Request):
             synopsis=data.get("synopsis", ""),
             style_guide=data.get("style_guide", ""),
             target_chapter_words=data.get("target_chapter_words", 3000),
+            small_summary_chapter_count=data.get("small_summary_chapter_count", 10),
+            large_summary_merge_count=data.get("large_summary_merge_count", 3),
+            auto_hide_summarized=data.get("auto_hide_summarized", True),
         )
         db.add(story)
 
@@ -126,6 +129,9 @@ async def get_story(story_id: str):
             "synopsis": story.synopsis,
             "style_guide": story.style_guide,
             "target_chapter_words": story.target_chapter_words,
+            "small_summary_chapter_count": story.small_summary_chapter_count,
+            "large_summary_merge_count": story.large_summary_merge_count,
+            "auto_hide_summarized": story.auto_hide_summarized,
             "current_total_words": story.current_total_words,
             "status": story.status.value,
             "created_at": story.created_at.isoformat(),
@@ -148,7 +154,9 @@ async def update_story(story_id: str, request: Request):
         if not story:
             raise HTTPException(status_code=404, detail="Story not found")
 
-        for field in ["title", "author", "genre", "synopsis", "style_guide", "target_chapter_words", "status"]:
+        for field in ["title", "author", "genre", "synopsis", "style_guide",
+                       "target_chapter_words", "small_summary_chapter_count",
+                       "large_summary_merge_count", "auto_hide_summarized", "status"]:
             if field in data:
                 setattr(story, field, data[field])
 

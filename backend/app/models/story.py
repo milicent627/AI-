@@ -29,6 +29,9 @@ class Story(Base):
     style_guide: Mapped[str] = mapped_column(Text, default="")
     target_chapter_words: Mapped[int] = mapped_column(Integer, default=3000)
     current_total_words: Mapped[int] = mapped_column(Integer, default=0)
+    small_summary_chapter_count: Mapped[int] = mapped_column(Integer, default=10)
+    large_summary_merge_count: Mapped[int] = mapped_column(Integer, default=3)
+    auto_hide_summarized: Mapped[bool] = mapped_column(default=True)
     status: Mapped[StoryStatus] = mapped_column(SAEnum(StoryStatus), default=StoryStatus.ongoing)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
@@ -53,6 +56,7 @@ class Chapter(Base):
     archive_path: Mapped[str] = mapped_column(String(500), default="")
     parent_chapter_id: Mapped[str | None] = mapped_column(String(36), nullable=True, default=None)
     branch_name: Mapped[str] = mapped_column(String(100), default="主线")
+    hidden: Mapped[bool] = mapped_column(default=False)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 

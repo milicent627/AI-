@@ -15,21 +15,10 @@ class PolishingService:
         if not chapter or not chapter.content:
             raise ValueError("Chapter not found or empty")
 
-        config_result = await db.execute(
-            select(ModelConfig)
-            .where(ModelConfig.role == ModelRole.polishing, ModelConfig.is_active == True)
-            .limit(1)
-        )
-        config = config_result.scalar_one_or_none()
+        from ..utils.model_fallback import get_model_config
+        config = await get_model_config(db, ModelRole.polishing)
         if not config:
-            result = await db.execute(
-                select(ModelConfig)
-                .where(ModelConfig.role == ModelRole.continuation, ModelConfig.is_active == True)
-                .limit(1)
-            )
-            config = result.scalar_one_or_none()
-        if not config:
-            raise ValueError("No polishing model configured")
+            raise ValueError("No model configured for polishing")
 
         text_to_polish = chapter.content if full_chapter else chapter.content[-5000:]
 
@@ -54,21 +43,10 @@ class PolishingService:
 
     async def polish_stream(self, db: AsyncSession, chapter_id: str, text: str):
         """Stream polish the given text."""
-        config_result = await db.execute(
-            select(ModelConfig)
-            .where(ModelConfig.role == ModelRole.polishing, ModelConfig.is_active == True)
-            .limit(1)
-        )
-        config = config_result.scalar_one_or_none()
+        from ..utils.model_fallback import get_model_config
+        config = await get_model_config(db, ModelRole.polishing)
         if not config:
-            result = await db.execute(
-                select(ModelConfig)
-                .where(ModelConfig.role == ModelRole.continuation, ModelConfig.is_active == True)
-                .limit(1)
-            )
-            config = result.scalar_one_or_none()
-        if not config:
-            raise ValueError("No polishing model configured")
+            raise ValueError("No model configured for polishing")
 
         provider = self.registry.get_or_create(config)
         async for chunk in provider.generate_stream([

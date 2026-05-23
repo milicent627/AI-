@@ -34,6 +34,7 @@ async def list_chapters(story_id: str):
                         "word_count": c.word_count,
                         "status": c.status.value if c.status else "draft",
                         "is_archived": c.is_archived,
+                        "hidden": c.hidden,
                         "branch_name": c.branch_name,
                         "updated_at": c.updated_at.isoformat(),
                     }
