@@ -34,6 +34,7 @@ class WorldBookEntry(Base):
     attributes: Mapped[dict] = mapped_column(JSON, default=dict)
     aliases: Mapped[list] = mapped_column(JSON, default=list)
     importance: Mapped[int] = mapped_column(Integer, default=1)
+    sort_order: Mapped[int] = mapped_column(Integer, default=0)
     status: Mapped[EntryStatus] = mapped_column(SAEnum(EntryStatus), default=EntryStatus.active)
     version: Mapped[int] = mapped_column(Integer, default=1)
     source_chapter_id: Mapped[str | None] = mapped_column(String(36), nullable=True)

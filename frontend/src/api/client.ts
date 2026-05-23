@@ -136,4 +136,8 @@ export const api = {
   createPromptPreset: (data: any) => request<any>('/prompt-presets/', { method: 'POST', body: JSON.stringify(data) }),
   updatePromptPreset: (id: string, data: any) => request<any>(`/prompt-presets/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
   deletePromptPreset: (id: string) => request<any>(`/prompt-presets/${id}`, { method: 'DELETE' }),
+  createFragment: (presetId: string, data: any) => request<any>(`/prompt-presets/${presetId}/fragments`, { method: 'POST', body: JSON.stringify(data) }),
+  updateFragment: (presetId: string, fragId: string, data: any) => request<any>(`/prompt-presets/${presetId}/fragments/${fragId}`, { method: 'PUT', body: JSON.stringify(data) }),
+  deleteFragment: (presetId: string, fragId: string) => request<any>(`/prompt-presets/${presetId}/fragments/${fragId}`, { method: 'DELETE' }),
+  reorderFragments: (presetId: string, order: string[]) => request<any>(`/prompt-presets/${presetId}/reorder`, { method: 'POST', body: JSON.stringify({ order }) }),
 };

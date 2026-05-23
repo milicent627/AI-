@@ -34,6 +34,7 @@ async def list_entries(story_id: str, category: str = ""):
                         "aliases": e.aliases,
                         "attributes": e.attributes,
                         "importance": e.importance,
+                        "sort_order": e.sort_order,
                         "status": e.status.value if e.status else "active",
                         "version": e.version,
                         "source_chapter_id": e.source_chapter_id,
@@ -108,7 +109,7 @@ async def update_entry(story_id: str, entry_id: str, request: Request):
             if not entry:
                 raise HTTPException(status_code=404, detail="Entry not found")
 
-            for field in ["name", "description", "aliases", "attributes", "importance", "status", "category"]:
+            for field in ["name", "description", "aliases", "attributes", "importance", "sort_order", "status", "category"]:
                 if field in data:
                     setattr(entry, field, data[field])
 

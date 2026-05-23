@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { api } from '../api/client';
 import type { ModelConfig, PromptPreset } from '../types';
-import { ArrowLeft, Plus, Trash2, Check, Save, Copy } from 'lucide-react';
+import { ArrowLeft, Plus, Trash2, Check, Save, Copy, ChevronDown, ChevronUp, GripVertical, EyeOff, Eye } from 'lucide-react';
 
 const PROVIDERS = [
   { value: 'openai', label: 'OpenAI', models: ['gpt-4o', 'gpt-4o-mini', 'gpt-4-turbo', 'gpt-3.5-turbo'] },
@@ -46,6 +46,10 @@ export default function SettingsPage() {
   const [promptPresets, setPromptPresets] = useState<PromptPreset[]>([]);
   const [editingPrompt, setEditingPrompt] = useState<PromptPreset | null>(null);
   const [promptForm, setPromptForm] = useState({ name: '', role: 'continuation_system', content: '' });
+  const [expandedPreset, setExpandedPreset] = useState<string | null>(null);
+  const [editingFrag, setEditingFrag] = useState<string | null>(null);
+  const [fragContent, setFragContent] = useState('');
+  const [newFragContent, setNewFragContent] = useState('');
 
   useEffect(() => {
     api.listModels().then(d => {
@@ -254,61 +258,177 @@ export default function SettingsPage() {
 
       {tab === 'prompts' && (
         <>
-          {/* Prompt form */}
+          {/* New preset form */}
           <div className="bg-gray-900 border border-gray-800 rounded-xl p-5 mb-6">
-            <h2 className="font-bold mb-4">{editingPrompt ? '编辑提示词' : '添加自定义提示词'}</h2>
-            <div className="space-y-3">
-              <div className="flex gap-3">
-                <div className="flex-1">
-                  <label className="text-xs text-gray-500">名称</label>
-                  <input className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm mt-1"
-                    placeholder="我的自定义提示词" value={promptForm.name}
-                    onChange={e => setPromptForm({ ...promptForm, name: e.target.value })} />
-                </div>
-                <div className="flex-1">
-                  <label className="text-xs text-gray-500">类型</label>
-                  <select className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm mt-1"
-                    value={promptForm.role} onChange={e => setPromptForm({ ...promptForm, role: e.target.value })}>
-                    {PROMPT_ROLES.map(r => <option key={r.value} value={r.value}>{r.label}</option>)}
-                  </select>
-                </div>
+            <h2 className="font-bold mb-4">添加自定义提示词预设</h2>
+            <div className="flex gap-3">
+              <div className="flex-1">
+                <label className="text-xs text-gray-500">名称</label>
+                <input className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm mt-1"
+                  placeholder="我的自定义提示词" value={promptForm.name}
+                  onChange={e => setPromptForm({ ...promptForm, name: e.target.value })} />
               </div>
-              <div>
-                <label className="text-xs text-gray-500">内容</label>
-                <textarea className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm mt-1 h-40 resize-none font-mono"
-                  value={promptForm.content} onChange={e => setPromptForm({ ...promptForm, content: e.target.value })} />
+              <div className="flex-1">
+                <label className="text-xs text-gray-500">类型</label>
+                <select className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm mt-1"
+                  value={promptForm.role} onChange={e => setPromptForm({ ...promptForm, role: e.target.value })}>
+                  {PROMPT_ROLES.map(r => <option key={r.value} value={r.value}>{r.label}</option>)}
+                </select>
               </div>
             </div>
             <div className="flex gap-2 mt-4 justify-end">
-              {editingPrompt && <button onClick={() => { setEditingPrompt(null); setPromptForm({ name: '', role: 'continuation_system', content: '' }); }}
-                className="px-4 py-1.5 border border-gray-700 rounded-lg text-sm hover:bg-gray-800">取消</button>}
               <button onClick={savePrompt} className="flex items-center gap-1 px-4 py-1.5 bg-blue-600 rounded-lg text-sm font-medium hover:bg-blue-700">
-                <Check size={14} /> {editingPrompt ? '更新' : '添加'}
+                <Check size={14} /> 添加预设
               </button>
             </div>
           </div>
 
-          {/* Prompt list */}
+          {/* Prompt presets with fragments */}
           <div className="space-y-3">
             <h2 className="font-bold text-sm text-gray-400 uppercase tracking-wider">提示词预设</h2>
-            {promptPresets.map(p => (
-              <div key={p.id} className="bg-gray-900 border border-gray-800 rounded-lg p-4 group">
-                <div className="flex items-center justify-between mb-2">
-                  <div className="flex items-center gap-2">
-                    <span className="font-medium">{p.name}</span>
-                    {p.is_default && <span className="text-xs bg-blue-900/50 text-blue-400 px-1.5 py-0.5 rounded">内置</span>}
-                    <span className="text-xs text-gray-600">{PROMPT_ROLES.find(r => r.value === p.role)?.label}</span>
-                  </div>
-                  <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                    <button onClick={() => editPrompt(p)} className="p-1 hover:bg-gray-800 rounded text-gray-400 text-xs">✏️</button>
+            {promptPresets.map(p => {
+              const isExpanded = expandedPreset === p.id;
+              return (
+                <div key={p.id} className="bg-gray-900 border border-gray-800 rounded-lg overflow-hidden">
+                  {/* Preset header */}
+                  <div
+                    className="p-4 flex items-center justify-between cursor-pointer hover:bg-gray-850 group"
+                    onClick={() => setExpandedPreset(isExpanded ? null : p.id)}
+                  >
+                    <div className="flex items-center gap-2">
+                      {isExpanded ? <ChevronDown size={14} className="text-gray-500" /> : <ChevronUp size={14} className="text-gray-600" />}
+                      <span className="font-medium">{p.name}</span>
+                      {p.is_default && <span className="text-xs bg-blue-900/50 text-blue-400 px-1.5 py-0.5 rounded">内置</span>}
+                      <span className="text-xs text-gray-600">{PROMPT_ROLES.find(r => r.value === p.role)?.label}</span>
+                      <span className="text-xs text-gray-700">({p.fragments?.length || 0} 条)</span>
+                    </div>
                     {!p.is_default && (
-                      <button onClick={() => deletePrompt(p.id)} className="p-1 hover:bg-red-900/50 rounded text-red-400"><Trash2 size={14} /></button>
+                      <button onClick={(e) => { e.stopPropagation(); deletePrompt(p.id); }}
+                        className="opacity-0 group-hover:opacity-100 p-1 hover:bg-red-900/50 rounded text-red-400">
+                        <Trash2 size={14} />
+                      </button>
                     )}
                   </div>
+
+                  {/* Expanded fragments editor */}
+                  {isExpanded && (
+                    <div className="border-t border-gray-800 px-4 py-3 space-y-3">
+                      {/* Assembled preview */}
+                      <details className="text-xs">
+                        <summary className="text-gray-500 cursor-pointer mb-1">组装后的完整提示词预览</summary>
+                        <pre className="bg-gray-950 p-3 rounded text-gray-400 whitespace-pre-wrap max-h-48 overflow-y-auto mt-1">{p.content}</pre>
+                      </details>
+
+                      {/* Fragment list */}
+                      <div className="space-y-1.5">
+                        {(p.fragments || []).sort((a, b) => a.sort_order - b.sort_order).map((frag, idx) => (
+                          <div key={frag.id} className={`flex items-start gap-2 p-2 rounded ${!frag.is_active ? 'opacity-40' : ''} ${editingFrag === frag.id ? 'bg-gray-800' : 'bg-gray-950'}`}>
+                            <div className="flex flex-col items-center gap-0.5 mt-0.5">
+                              <button
+                                onClick={async () => {
+                                  const frags = [...(p.fragments || [])].sort((a, b) => a.sort_order - b.sort_order);
+                                  if (idx === 0) return;
+                                  [frags[idx - 1], frags[idx]] = [frags[idx], frags[idx - 1]];
+                                  const order = frags.map(f => f.id);
+                                  await api.reorderFragments(p.id, order);
+                                  refreshPrompts();
+                                }}
+                                disabled={idx === 0}
+                                className="text-gray-600 hover:text-gray-300 disabled:opacity-30"
+                              ><ChevronUp size={12} /></button>
+                              <GripVertical size={12} className="text-gray-700" />
+                              <button
+                                onClick={async () => {
+                                  const frags = [...(p.fragments || [])].sort((a, b) => a.sort_order - b.sort_order);
+                                  if (idx >= frags.length - 1) return;
+                                  [frags[idx], frags[idx + 1]] = [frags[idx + 1], frags[idx]];
+                                  const order = frags.map(f => f.id);
+                                  await api.reorderFragments(p.id, order);
+                                  refreshPrompts();
+                                }}
+                                disabled={idx >= (p.fragments || []).length - 1}
+                                className="text-gray-600 hover:text-gray-300 disabled:opacity-30"
+                              ><ChevronDown size={12} /></button>
+                            </div>
+
+                            <button
+                              onClick={async () => {
+                                await api.updateFragment(p.id, frag.id, { is_active: !frag.is_active });
+                                refreshPrompts();
+                              }}
+                              className="mt-0.5 text-gray-500 hover:text-gray-300"
+                              title={frag.is_active ? '禁用此条目' : '启用此条目'}
+                            >
+                              {frag.is_active ? <Eye size={14} /> : <EyeOff size={14} />}
+                            </button>
+
+                            {editingFrag === frag.id ? (
+                              <div className="flex-1 flex gap-2">
+                                <input
+                                  className="flex-1 bg-gray-700 border border-gray-600 rounded px-2 py-1 text-xs"
+                                  value={fragContent}
+                                  onChange={e => setFragContent(e.target.value)}
+                                  autoFocus
+                                  onKeyDown={async (e) => {
+                                    if (e.key === 'Enter') {
+                                      await api.updateFragment(p.id, frag.id, { content: fragContent });
+                                      setEditingFrag(null);
+                                      refreshPrompts();
+                                    }
+                                    if (e.key === 'Escape') { setEditingFrag(null); }
+                                  }}
+                                />
+                                <button onClick={async () => { await api.updateFragment(p.id, frag.id, { content: fragContent }); setEditingFrag(null); refreshPrompts(); }}
+                                  className="text-xs px-2 py-1 bg-green-700 rounded hover:bg-green-600">保存</button>
+                              </div>
+                            ) : (
+                              <span
+                                className="flex-1 text-xs text-gray-400 cursor-pointer hover:text-gray-200"
+                                onClick={() => { setEditingFrag(frag.id); setFragContent(frag.content); }}
+                                title="点击编辑"
+                              >{frag.content.slice(0, 120)}{frag.content.length > 120 ? '...' : ''}</span>
+                            )}
+
+                            {!p.is_default && (
+                              <button
+                                onClick={async () => { await api.deleteFragment(p.id, frag.id); refreshPrompts(); }}
+                                className="text-gray-700 hover:text-red-400"
+                              ><Trash2 size={12} /></button>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+
+                      {/* Add fragment */}
+                      <div className="flex gap-2">
+                        <input
+                          className="flex-1 bg-gray-800 border border-gray-700 rounded-lg px-3 py-1.5 text-xs"
+                          placeholder="添加新的提示词条目..."
+                          value={newFragContent}
+                          onChange={e => setNewFragContent(e.target.value)}
+                          onKeyDown={async (e) => {
+                            if (e.key === 'Enter' && newFragContent.trim()) {
+                              await api.createFragment(p.id, { content: newFragContent.trim() });
+                              setNewFragContent('');
+                              refreshPrompts();
+                            }
+                          }}
+                        />
+                        <button
+                          onClick={async () => {
+                            if (!newFragContent.trim()) return;
+                            await api.createFragment(p.id, { content: newFragContent.trim() });
+                            setNewFragContent('');
+                            refreshPrompts();
+                          }}
+                          className="flex items-center gap-1 px-3 py-1.5 bg-blue-600 rounded-lg text-xs font-medium hover:bg-blue-700"
+                        ><Plus size={12} /> 添加</button>
+                      </div>
+                    </div>
+                  )}
                 </div>
-                <pre className="text-xs text-gray-500 whitespace-pre-wrap max-h-24 overflow-y-auto">{p.content.slice(0, 300)}{p.content.length > 300 ? '...' : ''}</pre>
-              </div>
-            ))}
+              );
+            })}
             {promptPresets.length === 0 && (
               <p className="text-gray-600 text-sm p-4 text-center border border-dashed border-gray-800 rounded-lg">暂无提示词预设</p>
             )}

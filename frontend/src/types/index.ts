@@ -50,6 +50,7 @@ export interface WorldBookEntry {
   aliases: string[];
   attributes: CharacterAttributes | Record<string, any>;
   importance: number;
+  sort_order: number;
   status: string;
   version: number;
   source_chapter_id: string | null;
@@ -105,6 +106,13 @@ export interface ModelConfig {
   api_key: string;
 }
 
+export interface PromptFragment {
+  id: string;
+  content: string;
+  sort_order: number;
+  is_active: boolean;
+}
+
 export interface PromptPreset {
   id: string;
   name: string;
@@ -112,6 +120,7 @@ export interface PromptPreset {
   content: string;
   is_default: boolean;
   created_at: string;
+  fragments: PromptFragment[];
 }
 
 export interface ContinuationRequest {
