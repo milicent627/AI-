@@ -300,66 +300,103 @@ async def assist_stream(story_id: str, request: Request):
 
 
 @router.get("/{story_id}/export")
-async def export_world_book(story_id: str):
+async def export_world_book(story_id: str, format: str = "bookwright"):
     engine = create_engine(_get_db_path(story_id))
     session_factory = create_session_factory(engine)
+    import json
+    from fastapi.responses import Response
     try:
         async with session_factory() as db:
             result = await db.execute(
                 select(WorldBookEntry)
                 .where(WorldBookEntry.story_id == story_id)
-                .order_by(WorldBookEntry.category, WorldBookEntry.importance.desc())
+                .order_by(WorldBookEntry.sort_order, WorldBookEntry.importance.desc())
             )
             entries = result.scalars().all()
 
-            rel_result = await db.execute(
-                select(CharacterRelation)
-                .where(CharacterRelation.story_id == story_id)
-            )
-            relations = rel_result.scalars().all()
-
-            export_data = {
-                "version": 1,
-                "type": "bookwright_world_book",
-                "exported_at": datetime.now(timezone.utc).isoformat(),
-                "entries": [
-                    {
-                        "category": e.category.value,
-                        "name": e.name,
-                        "description": e.description,
-                        "aliases": e.aliases,
-                        "attributes": e.attributes,
-                        "importance": e.importance,
-                        "sort_order": e.sort_order,
-                        "status": e.status.value if e.status else "active",
-                        "version": e.version,
+            if format == "sillytavern":
+                st_entries = {}
+                for i, e in enumerate(entries):
+                    keys = [e.name] + (e.aliases or [])
+                    st_entries[str(i)] = {
+                        "uid": i,
+                        "key": keys,
+                        "keysecondary": [],
+                        "comment": e.name,
+                        "content": e.description or "",
+                        "constant": False,
+                        "selective": True,
+                        "selectiveLogic": 0,
+                        "addMemo": True,
+                        "order": e.sort_order or i,
+                        "position": 4,
+                        "disable": e.status.value != "active" if e.status else False,
+                        "ignoreBudget": False,
+                        "excludeRecursion": True,
+                        "preventRecursion": True,
+                        "delayUntilRecursion": False,
+                        "probability": 100,
+                        "useProbability": True,
+                        "depth": 1,
+                        "group": e.category.value if e.category else "",
+                        "groupOverride": False,
+                        "groupWeight": 100,
+                        "scanDepth": None,
+                        "caseSensitive": None,
+                        "matchWholeWords": None,
+                        "useGroupScoring": None,
+                        "automationId": "",
+                        "role": 0,
+                        "sticky": 0,
+                        "cooldown": 0,
+                        "delay": 0,
+                        "triggers": [],
+                        "displayIndex": i,
                     }
-                    for e in entries
-                ],
-                "relations": [
-                    {
-                        "source_char_name": "",
-                        "target_char_name": "",
+                export_data = {"entries": st_entries}
+                filename = f"world_book_{story_id}_st.json"
+            else:
+                rel_result = await db.execute(
+                    select(CharacterRelation)
+                    .where(CharacterRelation.story_id == story_id)
+                )
+                relations = rel_result.scalars().all()
+
+                export_data = {
+                    "version": 1,
+                    "type": "bookwright_world_book",
+                    "exported_at": datetime.now(timezone.utc).isoformat(),
+                    "entries": [
+                        {
+                            "category": e.category.value,
+                            "name": e.name,
+                            "description": e.description,
+                            "aliases": e.aliases,
+                            "attributes": e.attributes,
+                            "importance": e.importance,
+                            "sort_order": e.sort_order,
+                            "status": e.status.value if e.status else "active",
+                            "version": e.version,
+                        }
+                        for e in entries
+                    ],
+                    "relations": [],
+                }
+                name_map = {e.id: e.name for e in entries}
+                for i, r in enumerate(relations):
+                    export_data["relations"].append({
+                        "source_char_name": name_map.get(r.source_char_id, ""),
+                        "target_char_name": name_map.get(r.target_char_id, ""),
                         "relation_type": r.relation_type,
                         "description": r.description,
                         "intensity": r.intensity,
-                    }
-                    for r in relations
-                ],
-            }
+                    })
+                filename = f"world_book_{story_id}.json"
 
-            # Resolve character names for relations
-            name_map = {e.id: e.name for e in entries}
-            for i, r in enumerate(relations):
-                export_data["relations"][i]["source_char_name"] = name_map.get(r.source_char_id, "")
-                export_data["relations"][i]["target_char_name"] = name_map.get(r.target_char_id, "")
-
-            from fastapi.responses import Response
-            import json
             return Response(
                 content=json.dumps(export_data, ensure_ascii=False, indent=2),
                 media_type="application/json",
-                headers={"Content-Disposition": f"attachment; filename=world_book_{story_id}.json"},
+                headers={"Content-Disposition": f"attachment; filename={filename}"},
             )
     finally:
         await engine.dispose()
@@ -374,14 +411,48 @@ async def import_world_book(story_id: str, file: UploadFile = File(...)):
     except json.JSONDecodeError:
         raise HTTPException(status_code=400, detail="无效的 JSON 文件")
 
-    if import_data.get("type") != "bookwright_world_book":
-        raise HTTPException(status_code=400, detail="不是有效的 BookWright 世界书导出文件")
+    # Detect format: SillyTavern has entries as dict (keyed by number), ours as list
+    raw_entries = import_data.get("entries", None)
+    is_sillytavern = isinstance(raw_entries, dict)
+    is_bookwright = import_data.get("type") == "bookwright_world_book" or isinstance(raw_entries, list)
+
+    if not is_sillytavern and not is_bookwright:
+        raise HTTPException(status_code=400, detail="无法识别的世界书格式（不支持的文件）")
+
+    # Normalize to our entry list format
+    if is_sillytavern:
+        normalized_entries = []
+        for _, st_entry in raw_entries.items():
+            keys = st_entry.get("key", [])
+            name = st_entry.get("comment", keys[0] if keys else "")
+            aliases = [k for k in keys if k != name] if name else keys
+            category = "custom"
+            group = st_entry.get("group", "")
+            if group:
+                for cat in EntryCategory:
+                    if cat.value in group.lower():
+                        category = cat.value
+                        break
+            normalized_entries.append({
+                "name": name,
+                "description": st_entry.get("content", ""),
+                "aliases": aliases,
+                "category": category,
+                "importance": 3,
+                "sort_order": st_entry.get("order", 0),
+                "status": "inactive" if st_entry.get("disable", False) else "active",
+                "attributes": {},
+            })
+        entry_list = normalized_entries
+        has_relations = False
+    else:
+        entry_list = import_data.get("entries", [])
+        has_relations = True
 
     engine = create_engine(_get_db_path(story_id))
     session_factory = create_session_factory(engine)
     try:
         async with session_factory() as db:
-            # Build existing name+category index
             existing_result = await db.execute(
                 select(WorldBookEntry).where(WorldBookEntry.story_id == story_id)
             )
@@ -390,9 +461,9 @@ async def import_world_book(story_id: str, file: UploadFile = File(...)):
 
             imported_count = 0
             updated_count = 0
-            new_entries = {}  # name -> new entry for relation mapping
+            new_entries = {}
 
-            for entry_data in import_data.get("entries", []):
+            for entry_data in entry_list:
                 key = (entry_data["name"], entry_data.get("category", "custom"))
                 if key in existing_index:
                     e = existing_index[key]
@@ -418,42 +489,42 @@ async def import_world_book(story_id: str, file: UploadFile = File(...)):
 
             await db.commit()
 
-            # Import relations
             rel_count = 0
-            for rel_data in import_data.get("relations", []):
-                src = new_entries.get(rel_data.get("source_char_name", ""))
-                tgt = new_entries.get(rel_data.get("target_char_name", ""))
-                if not src:
-                    src_result = await db.execute(
-                        select(WorldBookEntry).where(
-                            WorldBookEntry.story_id == story_id,
-                            WorldBookEntry.name == rel_data.get("source_char_name", ""),
-                            WorldBookEntry.category == EntryCategory.character,
+            if has_relations:
+                for rel_data in import_data.get("relations", []):
+                    src = new_entries.get(rel_data.get("source_char_name", ""))
+                    tgt = new_entries.get(rel_data.get("target_char_name", ""))
+                    if not src:
+                        src_result = await db.execute(
+                            select(WorldBookEntry).where(
+                                WorldBookEntry.story_id == story_id,
+                                WorldBookEntry.name == rel_data.get("source_char_name", ""),
+                                WorldBookEntry.category == EntryCategory.character,
+                            )
                         )
-                    )
-                    src = src_result.scalar_one_or_none()
-                if not tgt:
-                    tgt_result = await db.execute(
-                        select(WorldBookEntry).where(
-                            WorldBookEntry.story_id == story_id,
-                            WorldBookEntry.name == rel_data.get("target_char_name", ""),
-                            WorldBookEntry.category == EntryCategory.character,
+                        src = src_result.scalar_one_or_none()
+                    if not tgt:
+                        tgt_result = await db.execute(
+                            select(WorldBookEntry).where(
+                                WorldBookEntry.story_id == story_id,
+                                WorldBookEntry.name == rel_data.get("target_char_name", ""),
+                                WorldBookEntry.category == EntryCategory.character,
+                            )
                         )
-                    )
-                    tgt = tgt_result.scalar_one_or_none()
+                        tgt = tgt_result.scalar_one_or_none()
 
-                if src and tgt:
-                    rel = CharacterRelation(
-                        id=str(uuid.uuid4()),
-                        story_id=story_id,
-                        source_char_id=src.id,
-                        target_char_id=tgt.id,
-                        relation_type=rel_data.get("relation_type", ""),
-                        description=rel_data.get("description", ""),
-                        intensity=rel_data.get("intensity", 5),
-                    )
-                    db.add(rel)
-                    rel_count += 1
+                    if src and tgt:
+                        rel = CharacterRelation(
+                            id=str(uuid.uuid4()),
+                            story_id=story_id,
+                            source_char_id=src.id,
+                            target_char_id=tgt.id,
+                            relation_type=rel_data.get("relation_type", ""),
+                            description=rel_data.get("description", ""),
+                            intensity=rel_data.get("intensity", 5),
+                        )
+                        db.add(rel)
+                        rel_count += 1
 
             await db.commit()
 

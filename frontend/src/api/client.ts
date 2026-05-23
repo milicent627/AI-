@@ -146,14 +146,15 @@ export const api = {
   },
 
   // World Book import/export
-  exportWorldBook: async (storyId: string) => {
-    const res = await fetch(`${BASE}/world-book/${storyId}/export`);
+  exportWorldBook: async (storyId: string, format: 'bookwright' | 'sillytavern' = 'bookwright') => {
+    const suffix = format === 'sillytavern' ? '_st' : '';
+    const res = await fetch(`${BASE}/world-book/${storyId}/export?format=${format}`);
     if (!res.ok) throw new Error('Export failed');
     const blob = await res.blob();
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `world_book_${storyId}.json`;
+    a.download = `world_book_${storyId}${suffix}.json`;
     a.click();
     URL.revokeObjectURL(url);
   },
@@ -166,15 +167,19 @@ export const api = {
   },
 
   // Prompt Presets import/export
-  exportPromptPresets: async (role?: string) => {
-    const url = `${BASE}/prompt-presets/export-data${role ? `?role=${role}` : ''}`;
+  exportPromptPresets: async (role?: string, format: 'bookwright' | 'sillytavern' = 'bookwright') => {
+    const suffix = format === 'sillytavern' ? '_st' : '';
+    const params = new URLSearchParams();
+    if (role) params.set('role', role);
+    params.set('format', format);
+    const url = `${BASE}/prompt-presets/export-data?${params.toString()}`;
     const res = await fetch(url);
     if (!res.ok) throw new Error('Export failed');
     const blob = await res.blob();
     const url2 = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url2;
-    a.download = 'prompt_presets.json';
+    a.download = `prompt_presets${suffix}.json`;
     a.click();
     URL.revokeObjectURL(url2);
   },

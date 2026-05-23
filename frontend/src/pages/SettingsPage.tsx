@@ -133,8 +133,9 @@ export default function SettingsPage() {
     setPromptPresets(d.presets || []);
   };
 
+  const [promptExportFormat, setPromptExportFormat] = useState<'bookwright' | 'sillytavern'>('bookwright');
   const handlePromptExport = () => {
-    api.exportPromptPresets().catch(err => alert(`导出失败: ${err.message}`));
+    api.exportPromptPresets(undefined, promptExportFormat).catch(err => alert(`导出失败: ${err.message}`));
   };
 
   const promptImportRef = useRef<HTMLInputElement>(null);
@@ -313,6 +314,11 @@ export default function SettingsPage() {
             <div className="flex items-center justify-between">
               <h2 className="font-bold text-sm text-gray-400 uppercase tracking-wider">提示词预设</h2>
               <div className="flex gap-1">
+                <select value={promptExportFormat} onChange={e => setPromptExportFormat(e.target.value as any)}
+                  className="bg-gray-800 border border-gray-700 rounded px-1 py-1 text-xs w-16">
+                  <option value="bookwright">BW</option>
+                  <option value="sillytavern">ST</option>
+                </select>
                 <button onClick={handlePromptExport}
                   className="flex items-center gap-1 px-2 py-1 text-xs bg-gray-800 border border-gray-700 rounded hover:bg-gray-700">
                   <Download size={12} /> 导出

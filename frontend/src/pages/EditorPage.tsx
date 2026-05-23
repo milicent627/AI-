@@ -111,9 +111,10 @@ export default function EditorPage() {
   const chatContentRef = useRef('');
   const worldImportRef = useRef<HTMLInputElement>(null);
 
+  const [worldExportFormat, setWorldExportFormat] = useState<'bookwright' | 'sillytavern'>('bookwright');
   const handleWorldExport = () => {
     if (!storyId) return;
-    api.exportWorldBook(storyId).catch(err => alert(`导出失败: ${err.message}`));
+    api.exportWorldBook(storyId, worldExportFormat).catch(err => alert(`导出失败: ${err.message}`));
   };
 
   const handleWorldImport = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -476,6 +477,11 @@ export default function EditorPage() {
             })}
             {worldEntries.length === 0 && !showNewEntry && <p className="text-gray-600 text-sm p-3 text-center">暂无世界书条目</p>}
             <div className="flex gap-1 mt-3 pt-3 border-t border-gray-800">
+              <select value={worldExportFormat} onChange={e => setWorldExportFormat(e.target.value as any)}
+                className="bg-gray-800 border border-gray-700 rounded px-1 py-1 text-xs w-16">
+                <option value="bookwright">BW</option>
+                <option value="sillytavern">ST</option>
+              </select>
               <button onClick={handleWorldExport}
                 className="flex items-center gap-1 px-2 py-1 text-xs bg-gray-800 border border-gray-700 rounded hover:bg-gray-700">
                 <Download size={12} /> 导出

@@ -259,7 +259,7 @@ async def reorder_fragments(preset_id: str, request: Request):
 
 
 @router.get("/export-data")
-async def export_presets(role: str = ""):
+async def export_presets(role: str = "", format: str = "bookwright"):
     engine = await _ensure_db()
     session_factory = create_session_factory(engine)
     try:
@@ -274,33 +274,83 @@ async def export_presets(role: str = ""):
             result = await db.execute(query)
             presets = result.scalars().all()
 
-            export_data = {
-                "version": 1,
-                "type": "bookwright_prompt_presets",
-                "exported_at": datetime.now(timezone.utc).isoformat(),
-                "presets": [],
-            }
+            if format == "sillytavern":
+                # Collect all fragments from all presets
+                all_prompts = []
+                order_counter = 100
+                for p in presets:
+                    frag_result = await db.execute(
+                        select(PromptFragment).where(PromptFragment.preset_id == p.id).order_by(PromptFragment.sort_order)
+                    )
+                    fragments = frag_result.scalars().all()
+                    if not fragments:
+                        continue
+                    # Determine ST role mapping
+                    st_role = "system"
+                    if "user" in p.role.value:
+                        st_role = "user"
+                    elif "assistant" in p.role.value:
+                        st_role = "assistant"
+                    for f in fragments:
+                        all_prompts.append({
+                            "identifier": f.id,
+                            "name": (f.content[:40] + "..." if len(f.content) > 40 else f.content) or p.name,
+                            "enabled": f.is_active,
+                            "injection_position": 0,
+                            "injection_depth": 4,
+                            "injection_order": f.sort_order if f.sort_order else order_counter,
+                            "role": st_role,
+                            "content": f.content,
+                            "system_prompt": p.role.value.endswith("_system"),
+                            "marker": False,
+                            "forbid_overrides": False,
+                            "injection_trigger": [],
+                        })
+                        order_counter += 1
 
-            for p in presets:
-                frag_result = await db.execute(
-                    select(PromptFragment).where(PromptFragment.preset_id == p.id).order_by(PromptFragment.sort_order)
-                )
-                fragments = frag_result.scalars().all()
-                export_data["presets"].append({
-                    "name": p.name,
-                    "role": p.role.value,
-                    "content": p.content,
-                    "is_default": p.is_default,
-                    "fragments": [
-                        {"content": f.content, "sort_order": f.sort_order, "is_active": f.is_active}
-                        for f in fragments
-                    ],
-                })
+                export_data = {
+                    "temperature": 1,
+                    "frequency_penalty": 0,
+                    "presence_penalty": 0,
+                    "top_p": 1,
+                    "top_k": 64,
+                    "top_a": 0,
+                    "min_p": 0,
+                    "repetition_penalty": 1,
+                    "openai_max_context": 2000000,
+                    "openai_max_tokens": 20000,
+                    "stream_openai": True,
+                    "prompts": all_prompts,
+                }
+                filename = "prompt_presets_st.json"
+            else:
+                export_data = {
+                    "version": 1,
+                    "type": "bookwright_prompt_presets",
+                    "exported_at": datetime.now(timezone.utc).isoformat(),
+                    "presets": [],
+                }
+                for p in presets:
+                    frag_result = await db.execute(
+                        select(PromptFragment).where(PromptFragment.preset_id == p.id).order_by(PromptFragment.sort_order)
+                    )
+                    fragments = frag_result.scalars().all()
+                    export_data["presets"].append({
+                        "name": p.name,
+                        "role": p.role.value,
+                        "content": p.content,
+                        "is_default": p.is_default,
+                        "fragments": [
+                            {"content": f.content, "sort_order": f.sort_order, "is_active": f.is_active}
+                            for f in fragments
+                        ],
+                    })
+                filename = "prompt_presets.json"
 
             return Response(
                 content=json_module.dumps(export_data, ensure_ascii=False, indent=2),
                 media_type="application/json",
-                headers={"Content-Disposition": "attachment; filename=prompt_presets.json"},
+                headers={"Content-Disposition": f"attachment; filename={filename}"},
             )
     finally:
         await engine.dispose()
@@ -314,64 +364,113 @@ async def import_presets(file: UploadFile = File(...)):
     except json_module.JSONDecodeError:
         raise HTTPException(status_code=400, detail="无效的 JSON 文件")
 
-    if import_data.get("type") != "bookwright_prompt_presets":
-        raise HTTPException(status_code=400, detail="不是有效的 BookWright 提示词预设导出文件")
+    # Detect format: SillyTavern has top-level "prompts" array
+    is_sillytavern = "prompts" in import_data
+    is_bookwright = import_data.get("type") == "bookwright_prompt_presets" or "presets" in import_data
+
+    if not is_sillytavern and not is_bookwright:
+        raise HTTPException(status_code=400, detail="无法识别的提示词预设格式（不支持的文件）")
 
     engine = await _ensure_db()
     session_factory = create_session_factory(engine)
     try:
         async with session_factory() as db:
-            # Build existing index: (name, role) → preset
-            existing_result = await db.execute(select(PromptPreset))
-            existing_presets = existing_result.scalars().all()
-            existing_index = {(p.name, p.role): p for p in existing_presets}
+            if is_sillytavern:
+                # Convert ST prompts to our format: group by role
+                st_prompts = import_data.get("prompts", [])
+                groups: dict[str, list] = {}
+                for entry in st_prompts:
+                    st_role = entry.get("role", "system")
+                    is_system_prompt = entry.get("system_prompt", False)
+                    # Map ST role to our PromptRole
+                    if st_role == "system" and is_system_prompt:
+                        bw_role = "continuation_system"
+                    elif st_role == "system":
+                        bw_role = "continuation_system"
+                    elif st_role == "user":
+                        bw_role = "continuation_user"
+                    else:
+                        bw_role = "continuation_system"
+                    groups.setdefault(bw_role, []).append(entry)
 
-            imported_count = 0
-            updated_count = 0
-
-            for preset_data in import_data.get("presets", []):
-                role = PromptRole(preset_data["role"])
-                key = (preset_data["name"], role)
-                is_default = preset_data.get("is_default", False)
-
-                if key in existing_index and not is_default:
-                    preset = existing_index[key]
-                    updated_count += 1
-                    # Delete old fragments
-                    await db.execute(
-                        sa_delete(PromptFragment).where(PromptFragment.preset_id == preset.id)
-                    )
-                elif key in existing_index and is_default:
-                    preset = existing_index[key]
-                    # Update default preset fragments
-                    await db.execute(
-                        sa_delete(PromptFragment).where(PromptFragment.preset_id == preset.id)
-                    )
-                else:
+                imported_count = 0
+                for bw_role, entries in groups.items():
+                    preset_name = f"导入: {import_data.get('name', 'SillyTavern预设')} ({bw_role})"
                     preset = PromptPreset(
                         id=str(uuid.uuid4()),
-                        name=preset_data["name"],
-                        role=role,
-                        content=preset_data.get("content", ""),
-                        is_default=is_default,
+                        name=preset_name[:100],
+                        role=PromptRole(bw_role),
+                        content="",
+                        is_default=False,
                     )
                     db.add(preset)
                     await db.flush()
+
+                    for i, entry in enumerate(entries):
+                        db.add(PromptFragment(
+                            preset_id=preset.id,
+                            content=entry.get("content", ""),
+                            sort_order=entry.get("injection_order", i),
+                            is_active=entry.get("enabled", True),
+                        ))
                     imported_count += 1
 
-                for frag_data in preset_data.get("fragments", []):
-                    db.add(PromptFragment(
-                        preset_id=preset.id,
-                        content=frag_data.get("content", ""),
-                        sort_order=frag_data.get("sort_order", 0),
-                        is_active=frag_data.get("is_active", True),
-                    ))
+                await db.commit()
+                return {
+                    "ok": True,
+                    "imported": imported_count,
+                    "updated": 0,
+                }
+            else:
+                # Existing BookWright import logic
+                existing_result = await db.execute(select(PromptPreset))
+                existing_presets = existing_result.scalars().all()
+                existing_index = {(p.name, p.role): p for p in existing_presets}
 
-            await db.commit()
-            return {
-                "ok": True,
-                "imported": imported_count,
-                "updated": updated_count,
-            }
+                imported_count = 0
+                updated_count = 0
+
+                for preset_data in import_data.get("presets", []):
+                    role = PromptRole(preset_data["role"])
+                    key = (preset_data["name"], role)
+                    is_default = preset_data.get("is_default", False)
+
+                    if key in existing_index and not is_default:
+                        preset = existing_index[key]
+                        updated_count += 1
+                        await db.execute(
+                            sa_delete(PromptFragment).where(PromptFragment.preset_id == preset.id)
+                        )
+                    elif key in existing_index and is_default:
+                        preset = existing_index[key]
+                        await db.execute(
+                            sa_delete(PromptFragment).where(PromptFragment.preset_id == preset.id)
+                        )
+                    else:
+                        preset = PromptPreset(
+                            id=str(uuid.uuid4()),
+                            name=preset_data["name"],
+                            role=role,
+                            content=preset_data.get("content", ""),
+                            is_default=is_default,
+                        )
+                        db.add(preset)
+                        await db.flush()
+                        imported_count += 1
+
+                    for frag_data in preset_data.get("fragments", []):
+                        db.add(PromptFragment(
+                            preset_id=preset.id,
+                            content=frag_data.get("content", ""),
+                            sort_order=frag_data.get("sort_order", 0),
+                            is_active=frag_data.get("is_active", True),
+                        ))
+
+                await db.commit()
+                return {
+                    "ok": True,
+                    "imported": imported_count,
+                    "updated": updated_count,
+                }
     finally:
         await engine.dispose()
