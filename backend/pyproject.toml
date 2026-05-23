@@ -1,0 +1,30 @@
+[project]
+name = "bookwright"
+version = "0.1.0"
+description = "AI小说写作与续写器"
+requires-python = ">=3.11"
+dependencies = [
+    "fastapi>=0.115.0",
+    "uvicorn[standard]>=0.32.0",
+    "sqlalchemy[asyncio]>=2.0.35",
+    "aiosqlite>=0.20.0",
+    "pydantic>=2.9.0",
+    "pydantic-settings>=2.5.0",
+    "openai>=1.55.0",
+    "anthropic>=0.39.0",
+    "httpx>=0.28.0",
+    "python-multipart>=0.0.12",
+    "sse-starlette>=2.1.0",
+    "jieba>=0.42.1",
+    "tiktoken>=0.8.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.3.0",
+    "pytest-asyncio>=0.24.0",
+    "httpx>=0.28.0",
+]
+
+[tool.setuptools.packages.find]
+where = ["."]

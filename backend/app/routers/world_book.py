@@ -1,0 +1,171 @@
+from pathlib import Path
+from fastapi import APIRouter, HTTPException, Request
+from sqlalchemy import select
+from app.database import create_engine, create_session_factory
+from app.models.world_book import WorldBookEntry, CharacterRelation, EntryCategory
+from app.config import settings
+
+router = APIRouter(prefix="/api/world-book", tags=["world_book"])
+
+
+def _get_db_path(story_id: str) -> str:
+    return str(Path(settings.data_dir) / "archives" / story_id / "database.sqlite")
+
+
+@router.get("/{story_id}")
+async def list_entries(story_id: str, category: str = ""):
+    engine = create_engine(_get_db_path(story_id))
+    session_factory = create_session_factory(engine)
+    try:
+        async with session_factory() as db:
+            query = select(WorldBookEntry).where(WorldBookEntry.story_id == story_id)
+            if category:
+                query = query.where(WorldBookEntry.category == category)
+            query = query.order_by(WorldBookEntry.importance.desc())
+            result = await db.execute(query)
+            entries = result.scalars().all()
+            return {
+                "entries": [
+                    {
+                        "id": e.id,
+                        "category": e.category.value,
+                        "name": e.name,
+                        "description": e.description,
+                        "aliases": e.aliases,
+                        "attributes": e.attributes,
+                        "importance": e.importance,
+                        "status": e.status.value if e.status else "active",
+                        "version": e.version,
+                        "source_chapter_id": e.source_chapter_id,
+                        "updated_at": e.updated_at.isoformat(),
+                    }
+                    for e in entries
+                ]
+            }
+    finally:
+        await engine.dispose()
+
+
+@router.get("/{story_id}/{entry_id}")
+async def get_entry(story_id: str, entry_id: str):
+    engine = create_engine(_get_db_path(story_id))
+    session_factory = create_session_factory(engine)
+    try:
+        async with session_factory() as db:
+            entry = await db.get(WorldBookEntry, entry_id)
+            if not entry:
+                raise HTTPException(status_code=404, detail="Entry not found")
+
+            # Get relations for character entries
+            relations = []
+            if entry.category == EntryCategory.character:
+                rel_result = await db.execute(
+                    select(CharacterRelation).where(
+                        (CharacterRelation.source_char_id == entry_id)
+                        | (CharacterRelation.target_char_id == entry_id)
+                    )
+                )
+                for rel in rel_result.scalars().all():
+                    other_id = rel.target_char_id if rel.source_char_id == entry_id else rel.source_char_id
+                    other = await db.get(WorldBookEntry, other_id)
+                    relations.append({
+                        "id": rel.id,
+                        "other_name": other.name if other else "",
+                        "other_id": other_id,
+                        "relation_type": rel.relation_type,
+                        "description": rel.description,
+                        "intensity": rel.intensity,
+                        "direction": "outgoing" if rel.source_char_id == entry_id else "incoming",
+                    })
+
+            return {
+                "id": entry.id,
+                "category": entry.category.value,
+                "name": entry.name,
+                "description": entry.description,
+                "aliases": entry.aliases,
+                "attributes": entry.attributes,
+                "importance": entry.importance,
+                "status": entry.status.value if entry.status else "active",
+                "version": entry.version,
+                "source_chapter_id": entry.source_chapter_id,
+                "relations": relations,
+                "created_at": entry.created_at.isoformat(),
+                "updated_at": entry.updated_at.isoformat(),
+            }
+    finally:
+        await engine.dispose()
+
+
+@router.put("/{story_id}/{entry_id}")
+async def update_entry(story_id: str, entry_id: str, request: Request):
+    data = await request.json()
+    engine = create_engine(_get_db_path(story_id))
+    session_factory = create_session_factory(engine)
+    try:
+        async with session_factory() as db:
+            entry = await db.get(WorldBookEntry, entry_id)
+            if not entry:
+                raise HTTPException(status_code=404, detail="Entry not found")
+
+            for field in ["name", "description", "aliases", "attributes", "importance", "status", "category"]:
+                if field in data:
+                    setattr(entry, field, data[field])
+
+            entry.version += 1
+            await db.commit()
+            return {"ok": True}
+    finally:
+        await engine.dispose()
+
+
+@router.delete("/{story_id}/{entry_id}")
+async def delete_entry(story_id: str, entry_id: str):
+    engine = create_engine(_get_db_path(story_id))
+    session_factory = create_session_factory(engine)
+    try:
+        async with session_factory() as db:
+            entry = await db.get(WorldBookEntry, entry_id)
+            if entry:
+                await db.delete(entry)
+                await db.commit()
+            return {"ok": True}
+    finally:
+        await engine.dispose()
+
+
+@router.post("/{story_id}/relations")
+async def create_relation(story_id: str, request: Request):
+    data = await request.json()
+    engine = create_engine(_get_db_path(story_id))
+    session_factory = create_session_factory(engine)
+    try:
+        async with session_factory() as db:
+            relation = CharacterRelation(
+                story_id=story_id,
+                source_char_id=data["source_char_id"],
+                target_char_id=data["target_char_id"],
+                relation_type=data.get("relation_type", ""),
+                description=data.get("description", ""),
+                intensity=data.get("intensity", 5),
+            )
+            db.add(relation)
+            await db.commit()
+            return {"ok": True, "id": relation.id}
+    finally:
+        await engine.dispose()
+
+
+@router.delete("/{story_id}/relations/{relation_id}")
+async def delete_relation(story_id: str, relation_id: str):
+    engine = create_engine(_get_db_path(story_id))
+    session_factory = create_session_factory(engine)
+    try:
+        async with session_factory() as db:
+            rel = await db.get(CharacterRelation, relation_id)
+            if rel:
+                await db.delete(rel)
+                await db.commit()
+            return {"ok": True}
+    finally:
+        await engine.dispose()

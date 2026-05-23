@@ -1,0 +1,111 @@
+import sys
+from pathlib import Path
+from fastapi import APIRouter, Request
+from fastapi.responses import StreamingResponse
+from sqlalchemy import select
+
+sys.path.insert(0, str(Path(__file__).parent.parent.parent))
+
+from app.database import Base, create_engine, create_session_factory
+from app.models.story import Chapter
+from app.providers.registry import ProviderRegistry
+from app.services.continuation import ContinuationService
+from app.services.chapter_split import ChapterSplitService
+from app.services.world_analysis import WorldAnalysisService
+from app.services.summarization import SummarizationService
+from app.services.foreshadowing import ForeshadowingService
+from app.services.polishing import PolishingService
+from app.utils.text_utils import count_chinese_words
+from app.config import settings
+
+router = APIRouter(prefix="/api/continuation", tags=["continuation"])
+registry = ProviderRegistry()
+
+
+def _get_db_path(story_id: str) -> str:
+    return str(Path(settings.data_dir) / "archives" / story_id / "database.sqlite")
+
+
+@router.post("/stream")
+async def continue_story_stream(request: Request):
+    data = await request.json()
+    story_id = data["story_id"]
+    chapter_id = data["chapter_id"]
+
+    engine = create_engine(_get_db_path(story_id))
+    session_factory = create_session_factory(engine)
+    service = ContinuationService(registry)
+
+    async def event_stream():
+        collected = ""
+        try:
+            async with session_factory() as db:
+                async for chunk in service.continue_story(
+                    db, story_id, chapter_id,
+                    data.get("instruction", ""),
+                    data.get("direction", ""),
+                    data.get("branch_point", ""),
+                    data.get("branch_direction", ""),
+                    data.get("target_words", 800),
+                ):
+                    collected += chunk
+                    yield f"data: {chunk}\n\n"
+                yield "data: [DONE]\n\n"
+
+                chapter = await db.get(Chapter, chapter_id)
+                if chapter:
+                    chapter.content = (chapter.content or "") + "\n\n" + collected
+                    chapter.word_count = count_chinese_words(chapter.content)
+                    await db.commit()
+
+                splitter = ChapterSplitService(settings.data_dir)
+                await splitter.check_and_split(db, story_id, chapter_id)
+
+                analyzer = WorldAnalysisService(registry)
+                await analyzer.analyze_chapter(db, story_id, chapter_id)
+
+                summarizer = SummarizationService(registry)
+                await summarizer.check_and_summarize(db, story_id)
+
+                fp_service = ForeshadowingService(registry)
+                await fp_service.detect_in_chapter(db, story_id, chapter_id)
+        except Exception as e:
+            yield f"data: [ERROR] {str(e)}\n\n"
+        finally:
+            await engine.dispose()
+
+    return StreamingResponse(event_stream(), media_type="text/event-stream")
+
+
+@router.post("/polish-stream")
+async def polish_stream(request: Request):
+    data = await request.json()
+    story_id = data["story_id"]
+    text = data["text"]
+    chapter_id = data.get("chapter_id", "")
+
+    engine = create_engine(_get_db_path(story_id))
+    session_factory = create_session_factory(engine)
+    polisher = PolishingService(registry)
+
+    async def event_stream():
+        collected = ""
+        try:
+            async with session_factory() as db:
+                async for chunk in polisher.polish_stream(db, chapter_id, text):
+                    collected += chunk
+                    yield f"data: {chunk}\n\n"
+                yield "data: [DONE]\n\n"
+
+                if chapter_id:
+                    chapter = await db.get(Chapter, chapter_id)
+                    if chapter:
+                        chapter.content = collected
+                        chapter.word_count = count_chinese_words(collected)
+                        await db.commit()
+        except Exception as e:
+            yield f"data: [ERROR] {str(e)}\n\n"
+        finally:
+            await engine.dispose()
+
+    return StreamingResponse(event_stream(), media_type="text/event-stream")
