@@ -50,6 +50,8 @@ export default function SettingsPage() {
   const [editingFrag, setEditingFrag] = useState<string | null>(null);
   const [fragContent, setFragContent] = useState('');
   const [newFragContent, setNewFragContent] = useState('');
+  const [editingPresetName, setEditingPresetName] = useState<string | null>(null);
+  const [editPresetNameVal, setEditPresetNameVal] = useState('');
 
   useEffect(() => {
     api.listModels().then(d => {
@@ -340,7 +342,31 @@ export default function SettingsPage() {
                   >
                     <div className="flex items-center gap-2">
                       {isExpanded ? <ChevronDown size={14} className="text-gray-500" /> : <ChevronUp size={14} className="text-gray-600" />}
-                      <span className="font-medium">{p.name}</span>
+                      {editingPresetName === p.id ? (
+                        <input
+                          className="bg-gray-700 border border-gray-600 rounded px-2 py-0.5 text-xs font-medium w-40"
+                          value={editPresetNameVal}
+                          onChange={e => setEditPresetNameVal(e.target.value)}
+                          autoFocus
+                          onKeyDown={async (e) => {
+                            if (e.key === 'Enter') { await api.updatePromptPreset(p.id, { name: editPresetNameVal }); setEditingPresetName(null); refreshPrompts(); }
+                            if (e.key === 'Escape') { setEditingPresetName(null); }
+                          }}
+                          onBlur={async () => {
+                            if (editPresetNameVal !== p.name && editPresetNameVal.trim()) {
+                              await api.updatePromptPreset(p.id, { name: editPresetNameVal.trim() });
+                              refreshPrompts();
+                            }
+                            setEditingPresetName(null);
+                          }}
+                          onClick={e => e.stopPropagation()}
+                        />
+                      ) : (
+                        <span className="font-medium cursor-pointer hover:text-blue-400" onClick={(e) => {
+                          e.stopPropagation();
+                          if (!p.is_default) { setEditingPresetName(p.id); setEditPresetNameVal(p.name); }
+                        }} title={p.is_default ? '内置预设不可重命名' : '点击重命名'}>{p.name}</span>
+                      )}
                       {p.is_default && <span className="text-xs bg-blue-900/50 text-blue-400 px-1.5 py-0.5 rounded">内置</span>}
                       <span className="text-xs text-gray-600">{PROMPT_ROLES.find(r => r.value === p.role)?.label}</span>
                       <span className="text-xs text-gray-700">({p.fragments?.length || 0} 条)</span>

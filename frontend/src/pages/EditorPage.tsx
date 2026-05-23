@@ -4,7 +4,7 @@ import { api } from '../api/client';
 import { useStoryStore } from '../stores/storyStore';
 import type { Chapter, WorldBookEntry, Foreshadowing, Summary } from '../types';
 import {
-  ArrowLeft, Send, GitBranch, Sparkles, BookOpen, Users, Eye, FileText,
+  ArrowLeft, Send, GitBranch, Sparkles, BookOpen, Users, Eye, EyeOff, FileText,
   ChevronDown, Save, Wand2, MessageSquare, X, Download, Upload, Plus, Edit3, ChevronUp, Trash2
 } from 'lucide-react';
 
@@ -412,6 +412,15 @@ export default function EditorPage() {
                     </span>
                     <span className="font-medium truncate flex-1 text-xs">{e.name}</span>
                     <span className="text-xs text-amber-500 shrink-0">{'★'.repeat(e.importance)}</span>
+                    <button onClick={async () => {
+                      const newStatus = e.status === 'active' ? 'inactive' : 'active';
+                      await api.updateWorldEntry(storyId!, e.id, { status: newStatus });
+                      const d = await api.listWorldEntries(storyId!);
+                      setWorldEntries(d.entries || []);
+                    }} className={`p-0.5 rounded hover:bg-gray-700 ${e.status === 'active' ? 'text-green-500' : 'text-gray-700 hover:text-gray-400'}`}
+                      title={e.status === 'active' ? '已启用' : '已禁用'}>
+                      {e.status === 'active' ? <Eye size={10} /> : <EyeOff size={10} />}
+                    </button>
                     <button onClick={() => isEditing ? setEditingEntryId(null) : startEditEntry(e)}
                       className={`p-0.5 rounded hover:bg-gray-700 ${isEditing ? 'text-blue-400' : 'text-gray-600 hover:text-gray-300'}`}>
                       <Edit3 size={10} />
