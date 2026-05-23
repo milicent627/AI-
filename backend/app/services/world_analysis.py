@@ -59,15 +59,36 @@ class WorldAnalysisService:
         return new_entries
 
     async def _create_character(self, db: AsyncSession, story_id: str, chapter_id: str, data: dict) -> WorldBookEntry:
+        new_name = data.get("name", "")
+        new_aliases = data.get("aliases", [])
+
+        # Tier 1: exact name match
         existing = await db.execute(
             select(WorldBookEntry).where(
                 WorldBookEntry.story_id == story_id,
-                WorldBookEntry.name == data.get("name", ""),
+                WorldBookEntry.name == new_name,
                 WorldBookEntry.category == EntryCategory.character,
             )
         )
         if existing.scalar_one_or_none():
             return None
+
+        # Tier 2: alias matching — check all characters in this story
+        all_chars = await db.execute(
+            select(WorldBookEntry).where(
+                WorldBookEntry.story_id == story_id,
+                WorldBookEntry.category == EntryCategory.character,
+            )
+        )
+        for char in all_chars.scalars().all():
+            char_aliases = char.aliases or []
+            if new_name in char_aliases:
+                return None
+            if new_name == char.name:
+                return None
+            for alias in new_aliases:
+                if alias == char.name or alias in char_aliases:
+                    return None
 
         attrs = {
             "gender": data.get("gender", "未知"),
@@ -146,15 +167,29 @@ class WorldAnalysisService:
         return entry
 
     async def _create_entry(self, db: AsyncSession, story_id: str, chapter_id: str, category: EntryCategory, data: dict) -> WorldBookEntry:
+        new_name = data.get("name", "")
+
+        # Tier 1: exact name match
         existing = await db.execute(
             select(WorldBookEntry).where(
                 WorldBookEntry.story_id == story_id,
-                WorldBookEntry.name == data.get("name", ""),
+                WorldBookEntry.name == new_name,
                 WorldBookEntry.category == category,
             )
         )
         if existing.scalar_one_or_none():
             return None
+
+        # Tier 2: alias match
+        all_entries = await db.execute(
+            select(WorldBookEntry).where(
+                WorldBookEntry.story_id == story_id,
+                WorldBookEntry.category == category,
+            )
+        )
+        for entry in all_entries.scalars().all():
+            if new_name in (entry.aliases or []):
+                return None
 
         entry = WorldBookEntry(
             story_id=story_id,
