@@ -130,4 +130,10 @@ export const api = {
   createModel: (data: any) => request<any>('/models/', { method: 'POST', body: JSON.stringify(data) }),
   updateModel: (id: string, data: any) => request<any>(`/models/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
   deleteModel: (id: string) => request<any>(`/models/${id}`, { method: 'DELETE' }),
+
+  // Prompt Presets
+  listPromptPresets: (role?: string) => request<{ presets: any[] }>(`/prompt-presets/${role ? `?role=${role}` : ''}`),
+  createPromptPreset: (data: any) => request<any>('/prompt-presets/', { method: 'POST', body: JSON.stringify(data) }),
+  updatePromptPreset: (id: string, data: any) => request<any>(`/prompt-presets/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+  deletePromptPreset: (id: string) => request<any>(`/prompt-presets/${id}`, { method: 'DELETE' }),
 };

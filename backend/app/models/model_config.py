@@ -36,4 +36,5 @@ class ModelConfig(Base):
     max_tokens: Mapped[int] = mapped_column(Integer, default=4096)
     extra_params: Mapped[dict] = mapped_column(JSON, default=dict)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    is_preset: Mapped[bool] = mapped_column(Boolean, default=False)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)

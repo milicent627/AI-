@@ -101,6 +101,15 @@ export interface ModelConfig {
   api_key: string;
 }
 
+export interface PromptPreset {
+  id: string;
+  name: string;
+  role: string;
+  content: string;
+  is_default: boolean;
+  created_at: string;
+}
+
 export interface ContinuationRequest {
   story_id: string;
   chapter_id: string;

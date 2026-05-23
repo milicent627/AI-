@@ -1,6 +1,6 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from .routers import story, chapter, continuation, world_book, foreshadowing, model_config, summary
+from .routers import story, chapter, continuation, world_book, foreshadowing, model_config, summary, prompt_preset
 
 app = FastAPI(title="BookWright - AI小说写作与续写器", version="0.1.0")
 
@@ -19,6 +19,7 @@ app.include_router(world_book.router)
 app.include_router(foreshadowing.router)
 app.include_router(model_config.router)
 app.include_router(summary.router)
+app.include_router(prompt_preset.router)
 
 
 @app.get("/api/health")
