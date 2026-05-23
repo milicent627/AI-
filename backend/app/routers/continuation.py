@@ -60,6 +60,10 @@ async def websocket_endpoint(ws: WebSocket, story_id: str):
         ws_manager.disconnect(story_id, ws)
 
 
+def _get_index_db_path() -> str:
+    return str(Path(settings.data_dir) / "index.sqlite")
+
+
 @router.post("/stream")
 async def continue_story_stream(request: Request):
     data = await request.json()
@@ -68,14 +72,16 @@ async def continue_story_stream(request: Request):
 
     engine = create_engine(_get_db_path(story_id))
     session_factory = create_session_factory(engine)
+    index_engine = create_engine(_get_index_db_path())
+    index_factory = create_session_factory(index_engine)
     service = ContinuationService(registry)
 
     async def event_stream():
         collected = ""
         try:
-            async with session_factory() as db:
+            async with session_factory() as db, index_factory() as idb:
                 async for chunk in service.continue_story(
-                    db, story_id, chapter_id,
+                    db, idb, story_id, chapter_id,
                     data.get("instruction", ""),
                     data.get("direction", ""),
                     data.get("branch_point", ""),
@@ -102,6 +108,7 @@ async def continue_story_stream(request: Request):
             yield f"data: [ERROR] {str(e)}\n\n"
         finally:
             await engine.dispose()
+            await index_engine.dispose()
 
     return StreamingResponse(event_stream(), media_type="text/event-stream")
 
@@ -115,13 +122,15 @@ async def polish_stream(request: Request):
 
     engine = create_engine(_get_db_path(story_id))
     session_factory = create_session_factory(engine)
+    index_engine = create_engine(_get_index_db_path())
+    index_factory = create_session_factory(index_engine)
     polisher = PolishingService(registry)
 
     async def event_stream():
         collected = ""
         try:
-            async with session_factory() as db:
-                async for chunk in polisher.polish_stream(db, chapter_id, text):
+            async with session_factory() as db, index_factory() as idb:
+                async for chunk in polisher.polish_stream(db, idb, chapter_id, text):
                     collected += chunk
                     yield f"data: {chunk}\n\n"
                 yield "data: [DONE]\n\n"
@@ -136,5 +145,6 @@ async def polish_stream(request: Request):
             yield f"data: [ERROR] {str(e)}\n\n"
         finally:
             await engine.dispose()
+            await index_engine.dispose()
 
     return StreamingResponse(event_stream(), media_type="text/event-stream")
