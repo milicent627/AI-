@@ -107,6 +107,39 @@ export const api = {
     request<any>(`/world-book/${storyId}/relations`, { method: 'POST', body: JSON.stringify(data) }),
   deleteRelation: (storyId: string, relationId: string) =>
     request<any>(`/world-book/${storyId}/relations/${relationId}`, { method: 'DELETE' }),
+  // World Book AI assistant (SSE)
+  assistStream: (storyId: string, messages: { role: string; content: string }[], onChunk: (text: string) => void, onDone: () => void, onError: (err: string) => void) => {
+    const controller = new AbortController();
+    fetch(`${BASE}/world-book/${storyId}/assist-stream`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ messages }),
+      signal: controller.signal,
+    }).then(async (res) => {
+      const reader = res.body?.getReader();
+      if (!reader) { onError('No response body'); return; }
+      const decoder = new TextDecoder();
+      let buffer = '';
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n');
+        buffer = lines.pop() || '';
+        for (const line of lines) {
+          if (line.startsWith('data: ')) {
+            const content = line.slice(6);
+            if (content === '[DONE]') { onDone(); return; }
+            if (content.startsWith('[ERROR]')) { onError(content.slice(7)); return; }
+            onChunk(content);
+          }
+        }
+      }
+    }).catch(err => {
+      if (err.name !== 'AbortError') onError(err.message);
+    });
+    return controller;
+  },
 
   // Foreshadowing
   listForeshadowings: (storyId: string, status?: string) =>

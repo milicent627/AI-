@@ -5,7 +5,7 @@ import { useStoryStore } from '../stores/storyStore';
 import type { Chapter, WorldBookEntry, Foreshadowing, Summary } from '../types';
 import {
   ArrowLeft, Send, GitBranch, Sparkles, BookOpen, Users, Eye, FileText,
-  ChevronDown, Save, Wand2
+  ChevronDown, Save, Wand2, MessageSquare, X
 } from 'lucide-react';
 
 export default function EditorPage() {
@@ -28,8 +28,16 @@ export default function EditorPage() {
   const [worldEntries, setWorldEntries] = useState<WorldBookEntry[]>([]);
   const [foreshadowings, setForeshadowings] = useState<Foreshadowing[]>([]);
   const [summaries, setSummaries] = useState<Summary[]>([]);
-  const [activePanel, setActivePanel] = useState<'chapters' | 'world' | 'foreshadowing' | 'summaries'>('chapters');
+  const [activePanel, setActivePanel] = useState<'chapters' | 'world' | 'foreshadowing' | 'summaries' | 'assist'>('chapters');
   const [saveStatus, setSaveStatus] = useState<'saved' | 'saving' | 'unsaved'>('saved');
+
+  // AI Assistant chat state
+  const [chatMessages, setChatMessages] = useState<{ role: string; content: string }[]>([]);
+  const [chatInput, setChatInput] = useState('');
+  const [isChatLoading, setIsChatLoading] = useState(false);
+  const chatAbortRef = useRef<AbortController | null>(null);
+  const chatEndRef = useRef<HTMLDivElement>(null);
+  const chatContentRef = useRef('');
 
   const contentRef = useRef(content);
   contentRef.current = content;
@@ -184,6 +192,55 @@ export default function EditorPage() {
     );
   };
 
+  const sendChatMessage = () => {
+    if (!storyId || !chatInput.trim() || isChatLoading) return;
+
+    const userMsg = { role: 'user', content: chatInput.trim() };
+    const updated = [...chatMessages, userMsg];
+    setChatMessages(updated);
+    setChatInput('');
+    setIsChatLoading(true);
+    chatContentRef.current = '';
+
+    const assistantMsg = { role: 'assistant', content: '' };
+    setChatMessages(prev => [...prev, assistantMsg]);
+
+    chatAbortRef.current = api.assistStream(
+      storyId,
+      updated,
+      (chunk) => {
+        chatContentRef.current += chunk;
+        setChatMessages(prev => {
+          const copy = [...prev];
+          const last = copy[copy.length - 1];
+          if (last && last.role === 'assistant') {
+            last.content = chatContentRef.current;
+          }
+          return copy;
+        });
+      },
+      () => {
+        setIsChatLoading(false);
+      },
+      (err) => {
+        setIsChatLoading(false);
+        setChatMessages(prev => {
+          const copy = [...prev];
+          const last = copy[copy.length - 1];
+          if (last && last.role === 'assistant') {
+            last.content = `[错误] ${err}`;
+          }
+          return copy;
+        });
+      },
+    );
+  };
+
+  // Auto-scroll chat to bottom
+  useEffect(() => {
+    chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [chatMessages]);
+
   const panelContent = () => {
     switch (activePanel) {
       case 'chapters':
@@ -263,6 +320,55 @@ export default function EditorPage() {
             {summaries.length === 0 && <p className="text-gray-600 text-sm p-3">暂无总结，归档章节后将自动生成</p>}
           </div>
         );
+      case 'assist':
+        return (
+          <div className="flex flex-col h-full">
+            <div className="flex-1 overflow-y-auto space-y-3 p-3">
+              {chatMessages.length === 0 && (
+                <div className="text-center text-gray-500 text-xs py-8">
+                  <MessageSquare size={32} className="mx-auto mb-2 opacity-50" />
+                  <p>AI 世界观构建助手</p>
+                  <p className="mt-1">可以问我：设计角色、构建势力、完善设定等</p>
+                </div>
+              )}
+              {chatMessages.map((msg, i) => (
+                <div key={i} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+                  <div className={`max-w-[90%] rounded-lg px-3 py-2 text-xs leading-relaxed whitespace-pre-wrap ${
+                    msg.role === 'user'
+                      ? 'bg-blue-600 text-white'
+                      : 'bg-gray-800 text-gray-300'
+                  }`}>
+                    {msg.content || (msg.role === 'assistant' && isChatLoading ? (
+                      <span className="inline-flex gap-1">
+                        <span className="w-1.5 h-3 bg-blue-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
+                        <span className="w-1.5 h-3 bg-blue-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
+                        <span className="w-1.5 h-3 bg-blue-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
+                      </span>
+                    ) : null)}
+                  </div>
+                </div>
+              ))}
+              <div ref={chatEndRef} />
+            </div>
+            <div className="border-t border-gray-800 p-2 flex gap-2">
+              <input
+                value={chatInput}
+                onChange={e => setChatInput(e.target.value)}
+                onKeyDown={e => e.key === 'Enter' && !e.shiftKey && sendChatMessage()}
+                placeholder="问AI关于世界观的问题..."
+                className="flex-1 bg-gray-900 border border-gray-700 rounded-lg px-3 py-1.5 text-xs outline-none focus:border-blue-600"
+                disabled={isChatLoading}
+              />
+              <button
+                onClick={sendChatMessage}
+                disabled={isChatLoading || !chatInput.trim()}
+                className="px-3 py-1.5 bg-blue-600 rounded-lg hover:bg-blue-700 disabled:opacity-50 text-xs flex items-center gap-1"
+              >
+                <Send size={12} />
+              </button>
+            </div>
+          </div>
+        );
     }
   };
 
@@ -296,6 +402,10 @@ export default function EditorPage() {
             className={`px-2 py-1 text-xs border rounded hover:bg-gray-800 flex items-center gap-1 ${activePanel === 'summaries' ? 'border-blue-600 bg-blue-900/30' : 'border-gray-700'}`}>
             <FileText size={14} /> 总结
           </button>
+          <button onClick={() => setActivePanel(activePanel === 'assist' ? 'chapters' : 'assist')}
+            className={`px-2 py-1 text-xs border rounded hover:bg-gray-800 flex items-center gap-1 ${activePanel === 'assist' ? 'border-purple-600 bg-purple-900/30' : 'border-gray-700'}`}>
+            <MessageSquare size={14} /> AI助手
+          </button>
           <button onClick={saveChapter} className="px-3 py-1 text-xs bg-green-700 rounded hover:bg-green-600 flex items-center gap-1">
             <Save size={14} /> 保存
           </button>
@@ -306,7 +416,7 @@ export default function EditorPage() {
         {/* Sidebar */}
         <aside className="w-64 border-r border-gray-800 overflow-y-auto p-3 shrink-0">
           <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2 px-1">
-            {activePanel === 'chapters' ? '📚 章节列表' : activePanel === 'world' ? '🌍 世界书' : activePanel === 'foreshadowing' ? '🔮 伏笔管理' : '📊 总结'}
+            {activePanel === 'chapters' ? '📚 章节列表' : activePanel === 'world' ? '🌍 世界书' : activePanel === 'foreshadowing' ? '🔮 伏笔管理' : activePanel === 'assist' ? '🤖 AI助手' : '📊 总结'}
           </h3>
           {panelContent()}
         </aside>

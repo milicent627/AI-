@@ -1,9 +1,19 @@
+import sys
 from pathlib import Path
 from fastapi import APIRouter, HTTPException, Request
+from fastapi.responses import StreamingResponse
 from sqlalchemy import select
 from app.database import create_engine, create_session_factory
 from app.models.world_book import WorldBookEntry, CharacterRelation, EntryCategory
+from app.models.model_config import ModelRole
 from app.config import settings
+
+sys.path.insert(0, str(Path(__file__).parent.parent.parent))
+from app.providers.registry import ProviderRegistry
+from app.utils.prompt_templates import WORLD_ASSIST_SYSTEM_PROMPT
+from app.utils.model_fallback import get_model_config
+
+registry = ProviderRegistry()
 
 router = APIRouter(prefix="/api/world-book", tags=["world_book"])
 
@@ -170,3 +180,69 @@ async def delete_relation(story_id: str, relation_id: str):
             return {"ok": True}
     finally:
         await engine.dispose()
+
+
+@router.post("/{story_id}/assist-stream")
+async def assist_stream(story_id: str, request: Request):
+    data = await request.json()
+    messages = data.get("messages", [])
+
+    engine = create_engine(_get_db_path(story_id))
+    session_factory = create_session_factory(engine)
+
+    async def event_stream():
+        try:
+            async with session_factory() as db:
+                # Build world book context
+                result = await db.execute(
+                    select(WorldBookEntry)
+                    .where(WorldBookEntry.story_id == story_id)
+                    .order_by(WorldBookEntry.category, WorldBookEntry.importance.desc())
+                )
+                entries = result.scalars().all()
+
+                context_parts = []
+                if entries:
+                    for e in entries:
+                        detail = f"[{e.category.value}] {e.name}"
+                        if e.description:
+                            detail += f": {e.description[:200]}"
+                        if e.aliases:
+                            detail += f" (别名: {', '.join(e.aliases)})"
+                        attrs = e.attributes or {}
+                        if e.category == EntryCategory.character:
+                            if attrs.get("identity"):
+                                detail += f" | 身份: {attrs['identity']}"
+                            if attrs.get("personality"):
+                                detail += f" | 性格: {', '.join(attrs['personality'])}"
+                        context_parts.append(detail)
+
+                    context_text = "\n".join(context_parts)
+                    system_message = {
+                        "role": "system",
+                        "content": WORLD_ASSIST_SYSTEM_PROMPT + f"\n\n【当前小说的已有设定】\n{context_text}"
+                    }
+                else:
+                    system_message = {
+                        "role": "system",
+                        "content": WORLD_ASSIST_SYSTEM_PROMPT + "\n\n这部小说目前还没有任何设定，请帮作者从零开始构建世界观。"
+                    }
+
+                config = await get_model_config(db, ModelRole.world_analysis)
+                if not config:
+                    yield "data: [ERROR] 未配置世界书分析模型，请先在设置中配置\n\n"
+                    return
+
+                provider = registry.get_or_create(config)
+                full_messages = [system_message] + [{"role": m["role"], "content": m["content"]} for m in messages]
+
+                async for chunk in provider.generate_stream(full_messages):
+                    yield f"data: {chunk}\n\n"
+
+                yield "data: [DONE]\n\n"
+        except Exception as e:
+            yield f"data: [ERROR] {str(e)}\n\n"
+        finally:
+            await engine.dispose()
+
+    return StreamingResponse(event_stream(), media_type="text/event-stream")
