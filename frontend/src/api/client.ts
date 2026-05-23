@@ -98,11 +98,15 @@ export const api = {
   // World Book
   listWorldEntries: (storyId: string, category?: string) =>
     request<{ entries: any[] }>(`/world-book/${storyId}${category ? `?category=${category}` : ''}`),
+  createWorldEntry: (storyId: string, data: any) =>
+    request<any>(`/world-book/${storyId}`, { method: 'POST', body: JSON.stringify(data) }),
   getWorldEntry: (storyId: string, entryId: string) => request<any>(`/world-book/${storyId}/${entryId}`),
   updateWorldEntry: (storyId: string, entryId: string, data: any) =>
     request<any>(`/world-book/${storyId}/${entryId}`, { method: 'PUT', body: JSON.stringify(data) }),
   deleteWorldEntry: (storyId: string, entryId: string) =>
     request<any>(`/world-book/${storyId}/${entryId}`, { method: 'DELETE' }),
+  reorderWorldEntries: (storyId: string, order: string[]) =>
+    request<any>(`/world-book/${storyId}/reorder`, { method: 'POST', body: JSON.stringify({ order }) }),
   createRelation: (storyId: string, data: any) =>
     request<any>(`/world-book/${storyId}/relations`, { method: 'POST', body: JSON.stringify(data) }),
   deleteRelation: (storyId: string, relationId: string) =>

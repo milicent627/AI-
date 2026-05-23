@@ -147,6 +147,55 @@ async def delete_entry(story_id: str, entry_id: str):
         await engine.dispose()
 
 
+@router.post("/{story_id}")
+async def create_entry(story_id: str, request: Request):
+    data = await request.json()
+    engine = create_engine(_get_db_path(story_id))
+    session_factory = create_session_factory(engine)
+    try:
+        async with session_factory() as db:
+            entry = WorldBookEntry(
+                id=str(uuid.uuid4()),
+                story_id=story_id,
+                category=EntryCategory(data.get("category", "custom")),
+                name=data.get("name", ""),
+                description=data.get("description", ""),
+                aliases=data.get("aliases", []),
+                attributes=data.get("attributes", {}),
+                importance=data.get("importance", 3),
+                sort_order=data.get("sort_order", 0),
+                status=EntryStatus(data.get("status", "active")),
+            )
+            db.add(entry)
+            await db.commit()
+            await db.refresh(entry)
+            return {
+                "ok": True,
+                "id": entry.id,
+                "created_at": entry.created_at.isoformat(),
+            }
+    finally:
+        await engine.dispose()
+
+
+@router.post("/{story_id}/reorder")
+async def reorder_entries(story_id: str, request: Request):
+    data = await request.json()
+    order = data.get("order", [])
+    engine = create_engine(_get_db_path(story_id))
+    session_factory = create_session_factory(engine)
+    try:
+        async with session_factory() as db:
+            for i, entry_id in enumerate(order):
+                entry = await db.get(WorldBookEntry, entry_id)
+                if entry and entry.story_id == story_id:
+                    entry.sort_order = i
+            await db.commit()
+            return {"ok": True}
+    finally:
+        await engine.dispose()
+
+
 @router.post("/{story_id}/relations")
 async def create_relation(story_id: str, request: Request):
     data = await request.json()

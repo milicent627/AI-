@@ -5,7 +5,7 @@ import { useStoryStore } from '../stores/storyStore';
 import type { Chapter, WorldBookEntry, Foreshadowing, Summary } from '../types';
 import {
   ArrowLeft, Send, GitBranch, Sparkles, BookOpen, Users, Eye, FileText,
-  ChevronDown, Save, Wand2, MessageSquare, X, Download, Upload
+  ChevronDown, Save, Wand2, MessageSquare, X, Download, Upload, Plus, Edit3, ChevronUp, Trash2
 } from 'lucide-react';
 
 export default function EditorPage() {
@@ -30,6 +30,77 @@ export default function EditorPage() {
   const [summaries, setSummaries] = useState<Summary[]>([]);
   const [activePanel, setActivePanel] = useState<'chapters' | 'world' | 'foreshadowing' | 'summaries' | 'assist'>('chapters');
   const [saveStatus, setSaveStatus] = useState<'saved' | 'saving' | 'unsaved'>('saved');
+
+  // World book editing state
+  const [editingEntryId, setEditingEntryId] = useState<string | null>(null);
+  const [showNewEntry, setShowNewEntry] = useState(false);
+  const [entryForm, setEntryForm] = useState({
+    name: '', category: 'character', description: '', aliases: '',
+    importance: 3, sort_order: 0, status: 'active',
+  });
+
+  const resetEntryForm = () => setEntryForm({
+    name: '', category: 'character', description: '', aliases: '',
+    importance: 3, sort_order: 0, status: 'active',
+  });
+
+  const handleCreateEntry = async () => {
+    if (!storyId || !entryForm.name.trim()) return;
+    const data = {
+      ...entryForm,
+      aliases: entryForm.aliases.split(',').map(s => s.trim()).filter(Boolean),
+    };
+    await api.createWorldEntry(storyId, data);
+    const d = await api.listWorldEntries(storyId);
+    setWorldEntries(d.entries || []);
+    setShowNewEntry(false);
+    resetEntryForm();
+  };
+
+  const handleUpdateEntry = async (entryId: string) => {
+    if (!storyId) return;
+    const data = {
+      ...entryForm,
+      aliases: entryForm.aliases.split(',').map(s => s.trim()).filter(Boolean),
+    };
+    await api.updateWorldEntry(storyId, entryId, data);
+    const d = await api.listWorldEntries(storyId);
+    setWorldEntries(d.entries || []);
+    setEditingEntryId(null);
+  };
+
+  const handleDeleteEntry = async (entryId: string) => {
+    if (!storyId || !confirm('确定删除此条目？')) return;
+    await api.deleteWorldEntry(storyId, entryId);
+    setWorldEntries(prev => prev.filter(e => e.id !== entryId));
+  };
+
+  const startEditEntry = (entry: WorldBookEntry) => {
+    setEditingEntryId(entry.id);
+    setEntryForm({
+      name: entry.name,
+      category: entry.category,
+      description: entry.description || '',
+      aliases: (entry.aliases || []).join(', '),
+      importance: entry.importance,
+      sort_order: entry.sort_order || 0,
+      status: entry.status || 'active',
+    });
+  };
+
+  const moveEntry = async (entryId: string, direction: 'up' | 'down') => {
+    const sorted = [...worldEntries].sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0));
+    const idx = sorted.findIndex(e => e.id === entryId);
+    if (idx < 0) return;
+    if (direction === 'up' && idx === 0) return;
+    if (direction === 'down' && idx >= sorted.length - 1) return;
+    const targetIdx = direction === 'up' ? idx - 1 : idx + 1;
+    [sorted[idx], sorted[targetIdx]] = [sorted[targetIdx], sorted[idx]];
+    const order = sorted.map(e => e.id);
+    await api.reorderWorldEntries(storyId!, order);
+    const d = await api.listWorldEntries(storyId!);
+    setWorldEntries(d.entries || []);
+  };
 
   // AI Assistant chat state
   const [chatMessages, setChatMessages] = useState<{ role: string; content: string }[]>([]);
@@ -283,26 +354,127 @@ export default function EditorPage() {
         );
       case 'world':
         return (
-          <div className="space-y-2">
-            {worldEntries.map(e => (
-              <details key={e.id} className="bg-gray-900 rounded-lg p-3 text-sm">
-                <summary className="cursor-pointer font-medium flex items-center gap-2">
-                  {e.category === 'character' ? '👤' : e.category === 'faction' ? '🏛' : e.category === 'location' ? '📍' : '📦'}
-                  {e.name}
-                  <span className="text-xs text-gray-600 ml-auto">{'★'.repeat(e.importance)}</span>
-                </summary>
-                <p className="mt-2 text-gray-400 whitespace-pre-wrap">{e.description}</p>
-                {e.attributes && e.category === 'character' && (
-                  <div className="mt-1 text-xs text-gray-500 space-y-0.5">
-                    {e.attributes.identity && <div>身份: {e.attributes.identity}</div>}
-                    {e.attributes.personality?.length > 0 && <div>性格: {e.attributes.personality.join('、')}</div>}
-                    {e.attributes.abilities?.length > 0 && <div>能力: {e.attributes.abilities.join('、')}</div>}
-                    {e.attributes.catchphrases?.length > 0 && <div>口头禅: {e.attributes.catchphrases.join('、')}</div>}
+          <div className="space-y-1.5">
+            <button
+              onClick={() => { setShowNewEntry(!showNewEntry); resetEntryForm(); setEditingEntryId(null); }}
+              className="w-full flex items-center justify-center gap-1 px-2 py-1.5 text-xs border border-dashed border-gray-700 rounded-lg hover:border-blue-600 hover:text-blue-400 text-gray-500 mb-2"
+            ><Plus size={14} /> 新增条目</button>
+
+            {/* New entry form */}
+            {showNewEntry && (
+              <div className="bg-gray-800 rounded-lg p-3 space-y-2 mb-2">
+                <input className="w-full bg-gray-900 border border-gray-700 rounded px-2 py-1 text-xs" placeholder="名称"
+                  value={entryForm.name} onChange={e => setEntryForm({ ...entryForm, name: e.target.value })} />
+                <div className="flex gap-1">
+                  <select className="flex-1 bg-gray-900 border border-gray-700 rounded px-2 py-1 text-xs"
+                    value={entryForm.category} onChange={e => setEntryForm({ ...entryForm, category: e.target.value })}>
+                    <option value="character">角色</option>
+                    <option value="faction">势力</option>
+                    <option value="location">地点</option>
+                    <option value="item">物品</option>
+                    <option value="power_system">力量体系</option>
+                    <option value="catchphrase">口头禅</option>
+                    <option value="custom">自定义</option>
+                  </select>
+                  <select className="w-20 bg-gray-900 border border-gray-700 rounded px-2 py-1 text-xs"
+                    value={entryForm.importance} onChange={e => setEntryForm({ ...entryForm, importance: Number(e.target.value) })}>
+                    {[1,2,3,4,5].map(n => <option key={n} value={n}>{'★'.repeat(n)}</option>)}
+                  </select>
+                </div>
+                <textarea className="w-full bg-gray-900 border border-gray-700 rounded px-2 py-1 text-xs h-16 resize-none" placeholder="描述"
+                  value={entryForm.description} onChange={e => setEntryForm({ ...entryForm, description: e.target.value })} />
+                <input className="w-full bg-gray-900 border border-gray-700 rounded px-2 py-1 text-xs" placeholder="别名（逗号分隔）"
+                  value={entryForm.aliases} onChange={e => setEntryForm({ ...entryForm, aliases: e.target.value })} />
+                <div className="flex gap-2 justify-end">
+                  <button onClick={() => { setShowNewEntry(false); resetEntryForm(); }}
+                    className="px-2 py-1 text-xs border border-gray-600 rounded hover:bg-gray-700">取消</button>
+                  <button onClick={handleCreateEntry}
+                    className="px-2 py-1 text-xs bg-blue-600 rounded hover:bg-blue-700">创建</button>
+                </div>
+              </div>
+            )}
+
+            {[...worldEntries].sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0)).map((e, idx, arr) => {
+              const isEditing = editingEntryId === e.id;
+              return (
+                <div key={e.id} className={`bg-gray-900 rounded-lg overflow-hidden text-sm ${isEditing ? 'ring-1 ring-blue-600' : ''}`}>
+                  {/* Entry header */}
+                  <div className="p-2 flex items-center gap-1.5">
+                    <div className="flex flex-col gap-0.5">
+                      <button onClick={() => moveEntry(e.id, 'up')} disabled={idx === 0}
+                        className="text-gray-600 hover:text-gray-300 disabled:opacity-20"><ChevronUp size={10} /></button>
+                      <button onClick={() => moveEntry(e.id, 'down')} disabled={idx >= arr.length - 1}
+                        className="text-gray-600 hover:text-gray-300 disabled:opacity-20"><ChevronDown size={10} /></button>
+                    </div>
+                    <span className="text-xs shrink-0">
+                      {e.category === 'character' ? '👤' : e.category === 'faction' ? '🏛' : e.category === 'location' ? '📍' : e.category === 'item' ? '📦' : e.category === 'power_system' ? '⚡' : '🏷'}
+                    </span>
+                    <span className="font-medium truncate flex-1 text-xs">{e.name}</span>
+                    <span className="text-xs text-amber-500 shrink-0">{'★'.repeat(e.importance)}</span>
+                    <button onClick={() => isEditing ? setEditingEntryId(null) : startEditEntry(e)}
+                      className={`p-0.5 rounded hover:bg-gray-700 ${isEditing ? 'text-blue-400' : 'text-gray-600 hover:text-gray-300'}`}>
+                      <Edit3 size={10} />
+                    </button>
+                    <button onClick={() => handleDeleteEntry(e.id)}
+                      className="p-0.5 rounded hover:bg-red-900/50 text-gray-600 hover:text-red-400"><Trash2 size={10} /></button>
                   </div>
-                )}
-              </details>
-            ))}
-            {worldEntries.length === 0 && <p className="text-gray-600 text-sm p-3">暂无世界书条目，续写后自动分析</p>}
+
+                  {/* Expanded content */}
+                  {isEditing ? (
+                    <div className="border-t border-gray-800 px-3 py-2 space-y-1.5">
+                      <input className="w-full bg-gray-800 border border-gray-700 rounded px-2 py-1 text-xs"
+                        value={entryForm.name} onChange={ev => setEntryForm({ ...entryForm, name: ev.target.value })} placeholder="名称" />
+                      <div className="flex gap-1">
+                        <select className="flex-1 bg-gray-800 border border-gray-700 rounded px-2 py-1 text-xs"
+                          value={entryForm.category} onChange={ev => setEntryForm({ ...entryForm, category: ev.target.value })}>
+                          <option value="character">角色</option>
+                          <option value="faction">势力</option>
+                          <option value="location">地点</option>
+                          <option value="item">物品</option>
+                          <option value="power_system">力量体系</option>
+                          <option value="catchphrase">口头禅</option>
+                          <option value="custom">自定义</option>
+                        </select>
+                        <select className="w-20 bg-gray-800 border border-gray-700 rounded px-2 py-1 text-xs"
+                          value={entryForm.importance} onChange={ev => setEntryForm({ ...entryForm, importance: Number(ev.target.value) })}>
+                          {[1,2,3,4,5].map(n => <option key={n} value={n}>{'★'.repeat(n)}</option>)}
+                        </select>
+                        <select className="w-20 bg-gray-800 border border-gray-700 rounded px-2 py-1 text-xs"
+                          value={entryForm.status} onChange={ev => setEntryForm({ ...entryForm, status: ev.target.value })}>
+                          <option value="active">活跃</option>
+                          <option value="inactive">不活跃</option>
+                          <option value="dead">已死亡</option>
+                          <option value="missing">失踪</option>
+                        </select>
+                      </div>
+                      <textarea className="w-full bg-gray-800 border border-gray-700 rounded px-2 py-1 text-xs h-20 resize-none"
+                        value={entryForm.description} onChange={ev => setEntryForm({ ...entryForm, description: ev.target.value })} placeholder="描述" />
+                      <input className="w-full bg-gray-800 border border-gray-700 rounded px-2 py-1 text-xs"
+                        value={entryForm.aliases} onChange={ev => setEntryForm({ ...entryForm, aliases: ev.target.value })} placeholder="别名（逗号分隔）" />
+                      <div className="flex gap-2 justify-end">
+                        <button onClick={() => setEditingEntryId(null)}
+                          className="px-2 py-1 text-xs border border-gray-600 rounded hover:bg-gray-700">取消</button>
+                        <button onClick={() => handleUpdateEntry(e.id)}
+                          className="px-2 py-1 text-xs bg-blue-600 rounded hover:bg-blue-700">保存</button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="border-t border-gray-800 px-3 py-1.5">
+                      <p className="text-xs text-gray-400 whitespace-pre-wrap line-clamp-3">{e.description || '(无描述)'}</p>
+                      {e.aliases?.length > 0 && <p className="text-xs text-gray-600 mt-1">别名: {e.aliases.join(', ')}</p>}
+                      {e.attributes && e.category === 'character' && (
+                        <div className="mt-1 text-xs text-gray-500 space-y-0.5">
+                          {e.attributes.identity && <span>身份: {e.attributes.identity} </span>}
+                          {e.attributes.personality?.length > 0 && <span>性格: {e.attributes.personality.join('、')} </span>}
+                          {e.attributes.abilities?.length > 0 && <span>能力: {e.attributes.abilities.join('、')}</span>}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+            {worldEntries.length === 0 && !showNewEntry && <p className="text-gray-600 text-sm p-3 text-center">暂无世界书条目</p>}
             <div className="flex gap-1 mt-3 pt-3 border-t border-gray-800">
               <button onClick={handleWorldExport}
                 className="flex items-center gap-1 px-2 py-1 text-xs bg-gray-800 border border-gray-700 rounded hover:bg-gray-700">
