@@ -5,14 +5,16 @@ from ..models.story import Chapter
 from ..models.foreshadowing import Foreshadowing, ForeshadowingStatus
 from ..models.model_config import ModelConfig, ModelRole
 from ..providers.registry import ProviderRegistry
-from ..utils.prompt_templates import FORESHADOWING_DETECTION
+from ..services.prompt_assembler import PromptAssembler
 
 
 class ForeshadowingService:
     def __init__(self, registry: ProviderRegistry):
         self.registry = registry
 
-    async def detect_in_chapter(self, db: AsyncSession, story_id: str, chapter_id: str) -> list[Foreshadowing]:
+    async def detect_in_chapter(
+        self, db: AsyncSession, index_db: AsyncSession, story_id: str, chapter_id: str
+    ) -> list[Foreshadowing]:
         """Analyze a chapter for new or progressed foreshadowings."""
         chapter = await db.get(Chapter, chapter_id)
         if not chapter or not chapter.content:
@@ -35,13 +37,21 @@ class ForeshadowingService:
         if not config:
             return []
 
+        assembler = PromptAssembler()
+        messages = await assembler.assemble(
+            db, index_db, story_id, "foreshadowing",
+        )
+        messages.append({
+            "role": "user",
+            "content": f"已有伏笔列表：\n{existing_text}",
+        })
+        messages.append({
+            "role": "user",
+            "content": f"新增章节内容：\n{chapter.content[:15000]}",
+        })
+
         provider = self.registry.get_or_create(config)
-        response = await provider.generate([
-            {"role": "user", "content": FORESHADOWING_DETECTION.format(
-                existing_foreshadowings=existing_text,
-                chapter_content=chapter.content[:15000],
-            )}
-        ])
+        response = await provider.generate(messages)
 
         try:
             text = response.content.strip()

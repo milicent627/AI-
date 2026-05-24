@@ -33,21 +33,30 @@ async def _run_post_processing(story_id: str, chapter_id: str):
     try:
         engine = create_engine(_get_db_path(story_id))
         session_factory = create_session_factory(engine)
-        async with session_factory() as db:
+        index_engine = create_engine(_get_index_db_path())
+        index_factory = create_session_factory(index_engine)
+        async with session_factory() as db, index_factory() as idb:
             analyzer = WorldAnalysisService(registry)
-            await analyzer.analyze_chapter(db, story_id, chapter_id)
+            await analyzer.analyze_chapter(db, idb, story_id, chapter_id)
 
             summarizer = SummarizationService(registry)
             await summarizer.check_and_summarize(db, story_id)
 
             fp_service = ForeshadowingService(registry)
-            await fp_service.detect_in_chapter(db, story_id, chapter_id)
+            await fp_service.detect_in_chapter(db, idb, story_id, chapter_id)
 
         await ws_manager.notify(story_id, "analysis_complete", {
             "chapter_id": chapter_id,
         })
+        await engine.dispose()
+        await index_engine.dispose()
     except Exception as e:
         await ws_manager.notify(story_id, "analysis_error", {"error": str(e)})
+        try:
+            await engine.dispose()
+            await index_engine.dispose()
+        except Exception:
+            pass
 
 
 @router.websocket("/ws/{story_id}")

@@ -5,14 +5,16 @@ from ..models.story import Chapter
 from ..models.world_book import WorldBookEntry, CharacterRelation, EntryCategory, EntryStatus
 from ..models.model_config import ModelConfig, ModelRole
 from ..providers.registry import ProviderRegistry
-from ..utils.prompt_templates import WORLD_ANALYSIS_PROMPT
+from ..services.prompt_assembler import PromptAssembler
 
 
 class WorldAnalysisService:
     def __init__(self, registry: ProviderRegistry):
         self.registry = registry
 
-    async def analyze_chapter(self, db: AsyncSession, story_id: str, chapter_id: str) -> list[WorldBookEntry]:
+    async def analyze_chapter(
+        self, db: AsyncSession, index_db: AsyncSession, story_id: str, chapter_id: str
+    ) -> list[WorldBookEntry]:
         """Analyze a chapter and update the world book. Returns new/updated entries."""
         chapter = await db.get(Chapter, chapter_id)
         if not chapter or not chapter.content:
@@ -22,10 +24,17 @@ class WorldAnalysisService:
         if not config:
             return []
 
+        assembler = PromptAssembler()
+        messages = await assembler.assemble(
+            db, index_db, story_id, "world_analysis",
+        )
+        messages.append({
+            "role": "user",
+            "content": f"章节内容：\n{chapter.content[:15000]}",
+        })
+
         provider = self.registry.get_or_create(config)
-        response = await provider.generate([
-            {"role": "user", "content": WORLD_ANALYSIS_PROMPT.format(chapter_content=chapter.content[:15000])}
-        ])
+        response = await provider.generate(messages)
 
         try:
             data = self._parse_json(response.content)
@@ -73,7 +82,7 @@ class WorldAnalysisService:
         if existing.scalar_one_or_none():
             return None
 
-        # Tier 2: alias matching — check all characters in this story
+        # Tier 2: alias matching
         all_chars = await db.execute(
             select(WorldBookEntry).where(
                 WorldBookEntry.story_id == story_id,
@@ -169,7 +178,6 @@ class WorldAnalysisService:
     async def _create_entry(self, db: AsyncSession, story_id: str, chapter_id: str, category: EntryCategory, data: dict) -> WorldBookEntry:
         new_name = data.get("name", "")
 
-        # Tier 1: exact name match
         existing = await db.execute(
             select(WorldBookEntry).where(
                 WorldBookEntry.story_id == story_id,
@@ -180,7 +188,6 @@ class WorldAnalysisService:
         if existing.scalar_one_or_none():
             return None
 
-        # Tier 2: alias match
         all_entries = await db.execute(
             select(WorldBookEntry).where(
                 WorldBookEntry.story_id == story_id,
