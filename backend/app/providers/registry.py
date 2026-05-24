@@ -16,9 +16,7 @@ class ProviderRegistry:
         if config.id in self._providers:
             return self._providers[config.id]
 
-        cls = PROVIDER_MAP.get(config.provider)
-        if cls is None:
-            raise ValueError(f"Unsupported provider: {config.provider}")
+        cls = PROVIDER_MAP.get(config.provider, OpenAIProvider)
 
         params = {
             "temperature": config.temperature,
