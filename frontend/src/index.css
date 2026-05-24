@@ -10,14 +10,51 @@ body {
 .tiptap-editor .ProseMirror {
   min-height: 400px;
   outline: none;
-  padding: 1rem;
-  line-height: 1.8;
+  line-height: 2;
   font-size: 16px;
+  font-family: "Noto Serif SC", "Source Han Serif SC", "SimSun", serif;
 }
 
 .tiptap-editor .ProseMirror p {
   margin: 0.5em 0;
   text-indent: 2em;
+}
+
+.tiptap-editor .ProseMirror h1 {
+  font-size: 1.5rem;
+  font-weight: 700;
+  margin: 1.5em 0 0.5em;
+  text-indent: 0;
+}
+
+.tiptap-editor .ProseMirror h2 {
+  font-size: 1.25rem;
+  font-weight: 600;
+  margin: 1.2em 0 0.4em;
+  text-indent: 0;
+}
+
+.tiptap-editor .ProseMirror h3 {
+  font-size: 1.1rem;
+  font-weight: 600;
+  margin: 1em 0 0.3em;
+  text-indent: 0;
+}
+
+.tiptap-editor .ProseMirror p.is-editor-empty:first-child::before {
+  color: #adb5bd;
+  content: attr(data-placeholder);
+  float: left;
+  height: 0;
+  pointer-events: none;
+}
+
+/* AI card styles */
+.ai-card {
+  user-select: none;
+}
+.ai-card .font-serif {
+  font-family: "Noto Serif SC", "Source Han Serif SC", "SimSun", serif;
 }
 
 /* Scrollbar styling */
