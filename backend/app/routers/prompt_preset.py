@@ -11,7 +11,7 @@ from app.models.prompt_fragment import PromptFragment
 from app.utils.prompt_templates import (
     DEFAULT_CONTINUATION_SYSTEM_FRAGMENTS,
     DEFAULT_POLISHING_SYSTEM_FRAGMENTS,
-    CONTINUATION_USER, DIRECTED_CONTINUATION_USER,
+    DIRECTED_CONTINUATION_USER,
     POLISHING_USER,
     SUMMARY_SMALL_PROMPT, SUMMARY_LARGE_PROMPT,
     WORLD_ANALYSIS_PROMPT,
@@ -32,7 +32,6 @@ _DEFAULT_SINGLE_PRESETS = {
     PromptRole.large_summary_user: ("大总结 - 任务提示词", SUMMARY_LARGE_PROMPT),
     PromptRole.world_analysis_user: ("世界书分析 - 任务提示词", WORLD_ANALYSIS_PROMPT),
     PromptRole.foreshadowing_user: ("伏笔检测 - 任务提示词", FORESHADOWING_DETECTION),
-    PromptRole.continuation_user: ("续写 - 用户提示词", CONTINUATION_USER),
 }
 
 
@@ -155,6 +154,8 @@ async def update_preset(preset_id: str, request: Request):
                 raise HTTPException(status_code=404, detail="Not found")
             if "name" in data:
                 preset.name = data["name"]
+            if "role" in data:
+                preset.role = data["role"]
             await db.commit()
             return {"ok": True}
     finally:
@@ -170,7 +171,7 @@ async def delete_preset(preset_id: str):
             preset = await db.get(PromptPreset, preset_id)
             if preset and not preset.is_default:
                 await db.execute(
-                    select(PromptFragment).where(PromptFragment.preset_id == preset_id)
+                    sa_delete(PromptFragment).where(PromptFragment.preset_id == preset_id)
                 )
                 await db.delete(preset)
                 await db.commit()

@@ -42,7 +42,7 @@ export default function SettingsPage() {
   // Prompt preset state
   const [promptPresets, setPromptPresets] = useState<PromptPreset[]>([]);
   const [editingPrompt, setEditingPrompt] = useState<PromptPreset | null>(null);
-  const [promptForm, setPromptForm] = useState({ name: '', role: 'continuation_system', content: '' });
+  const [promptForm, setPromptForm] = useState({ name: '', role: 'continuation_system' });
   const [expandedPreset, setExpandedPreset] = useState<string | null>(null);
   const [editingFrag, setEditingFrag] = useState<string | null>(null);
   const [fragContent, setFragContent] = useState('');
@@ -124,18 +124,22 @@ export default function SettingsPage() {
 
   // --- Prompt handlers ---
   const savePrompt = async () => {
-    if (!promptForm.name || !promptForm.content) { alert('请填写名称和内容'); return; }
-    if (editingPrompt) await api.updatePromptPreset(editingPrompt.id, promptForm);
-    else await api.createPromptPreset(promptForm);
+    if (!promptForm.name) { alert('请填写名称'); return; }
+    if (editingPrompt) {
+      await api.updatePromptPreset(editingPrompt.id, promptForm);
+    } else {
+      const result = await api.createPromptPreset(promptForm);
+      if (result.id) setExpandedPreset(result.id);
+    }
     const d = await api.listPromptPresets();
     setPromptPresets(d.presets || []);
     setEditingPrompt(null);
-    setPromptForm({ name: '', role: 'continuation_system', content: '' });
+    setPromptForm({ name: '', role: 'continuation_system' });
   };
 
   const editPrompt = (p: PromptPreset) => {
     setEditingPrompt(p);
-    setPromptForm({ name: p.name, role: p.role, content: p.content });
+    setPromptForm({ name: p.name, role: p.role });
   };
 
   const deletePrompt = async (id: string) => {

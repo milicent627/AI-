@@ -239,14 +239,14 @@ class PromptAssembler:
                 frag = frag_result.scalar_one_or_none()
                 name = frag.preset_id if frag else item.source_id
             elif item.item_type == "world_entry":
-                content = await self._resolve_world_entry(story_session, item, {})
-                if content is None:
-                    continue
                 entry_result = await story_session.execute(
                     select(WorldBookEntry).where(WorldBookEntry.id == item.source_id)
                 )
                 entry = entry_result.scalar_one_or_none()
-                name = entry.name if entry else item.source_id
+                if entry is None:
+                    continue
+                content = f"{entry.name}: {entry.description}"
+                name = entry.name
             elif item.item_type == "summary":
                 content = await self._resolve_summary(story_session, story_id, item.source_id)
                 if content is None:
