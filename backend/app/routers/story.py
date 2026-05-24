@@ -331,7 +331,9 @@ async def seed_order(story_id: str, request: Request):
                     from app.models.prompt_preset import PromptPreset
                     from app.models.prompt_fragment import PromptFragment
                     presets_result = await idb.execute(
-                        select(PromptPreset).where(PromptPreset.role == preset_role)
+                        select(PromptPreset)
+                        .where(PromptPreset.role == preset_role)
+                        .order_by(PromptPreset.is_default.desc())
                     )
                     for preset in presets_result.scalars().all():
                         frags_result = await idb.execute(

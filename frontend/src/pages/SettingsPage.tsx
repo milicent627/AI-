@@ -409,19 +409,16 @@ export default function SettingsPage() {
                       ) : (
                         <span className="font-medium cursor-pointer hover:text-blue-400" onClick={(e) => {
                           e.stopPropagation();
-                          if (!p.is_default) { setEditingPresetName(p.id); setEditPresetNameVal(p.name); }
-                        }} title={p.is_default ? '内置预设不可重命名' : '点击重命名'}>{p.name}</span>
+                          setEditingPresetName(p.id); setEditPresetNameVal(p.name);
+                        }} title="点击重命名">{p.name}</span>
                       )}
-                      {p.is_default && <span className="text-xs bg-blue-900/50 text-blue-400 px-1.5 py-0.5 rounded">内置</span>}
                       <span className="text-xs text-gray-300">{PROMPT_ROLES.find(r => r.value === p.role)?.label}</span>
                       <span className="text-xs text-gray-200">({p.fragments?.length || 0} 条)</span>
                     </div>
-                    {!p.is_default && (
-                      <button onClick={(e) => { e.stopPropagation(); deletePrompt(p.id); }}
-                        className="opacity-0 group-hover:opacity-100 p-1 hover:bg-red-900/50 rounded text-red-400">
-                        <Trash2 size={14} />
-                      </button>
-                    )}
+                    <button onClick={(e) => { e.stopPropagation(); deletePrompt(p.id); }}
+                      className="opacity-0 group-hover:opacity-100 p-1 hover:bg-red-900/50 rounded text-red-400">
+                      <Trash2 size={14} />
+                    </button>
                   </div>
 
                   {/* Expanded fragments editor */}
@@ -503,12 +500,10 @@ export default function SettingsPage() {
                               >{frag.content.slice(0, 120)}{frag.content.length > 120 ? '...' : ''}</span>
                             )}
 
-                            {!p.is_default && (
-                              <button
-                                onClick={async () => { await api.deleteFragment(p.id, frag.id); refreshPrompts(); }}
-                                className="text-gray-200 hover:text-red-400"
-                              ><Trash2 size={12} /></button>
-                            )}
+                            <button
+                              onClick={async () => { await api.deleteFragment(p.id, frag.id); refreshPrompts(); }}
+                              className="text-gray-200 hover:text-red-400"
+                            ><Trash2 size={12} /></button>
                           </div>
                         ))}
                       </div>

@@ -80,10 +80,10 @@ async def list_presets(role: str = ""):
             await seed_defaults(db)
             await db.commit()
 
-            query = select(PromptPreset)
+            query = select(PromptPreset).where(PromptPreset.is_default == False)
             if role:
                 query = query.where(PromptPreset.role == role)
-            query = query.order_by(PromptPreset.is_default.desc(), PromptPreset.created_at.desc())
+            query = query.order_by(PromptPreset.created_at.desc())
             preset_result = await db.execute(query)
             presets = preset_result.scalars().all()
 
@@ -268,7 +268,7 @@ async def export_presets(role: str = "", format: str = "bookwright"):
             await seed_defaults(db)
             await db.commit()
 
-            query = select(PromptPreset)
+            query = select(PromptPreset).where(PromptPreset.is_default == False)
             if role:
                 query = query.where(PromptPreset.role == role)
             query = query.order_by(PromptPreset.role, PromptPreset.created_at.desc())
