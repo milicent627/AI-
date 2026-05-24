@@ -40,7 +40,7 @@ async def _run_post_processing(story_id: str, chapter_id: str):
             await analyzer.analyze_chapter(db, idb, story_id, chapter_id)
 
             summarizer = SummarizationService(registry)
-            await summarizer.check_and_summarize(db, story_id)
+            await summarizer.check_and_summarize(db, idb, story_id)
 
             fp_service = ForeshadowingService(registry)
             await fp_service.detect_in_chapter(db, idb, story_id, chapter_id)

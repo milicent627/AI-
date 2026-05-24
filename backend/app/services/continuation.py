@@ -72,7 +72,7 @@ class ContinuationService:
         messages.append({"role": "user", "content": user_prompt})
 
         from ..utils.model_fallback import get_model_config
-        config = await get_model_config(db, ModelRole.continuation)
+        config = await get_model_config(index_db, ModelRole.continuation)
         if not config:
             raise ValueError("No continuation model configured. Please set up a model in settings.")
 

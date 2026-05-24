@@ -233,6 +233,10 @@ async def delete_relation(story_id: str, relation_id: str):
         await engine.dispose()
 
 
+def _get_index_db_path() -> str:
+    return str(Path(settings.data_dir) / "index.sqlite")
+
+
 @router.post("/{story_id}/assist-stream")
 async def assist_stream(story_id: str, request: Request):
     data = await request.json()
@@ -240,10 +244,12 @@ async def assist_stream(story_id: str, request: Request):
 
     engine = create_engine(_get_db_path(story_id))
     session_factory = create_session_factory(engine)
+    index_engine = create_engine(_get_index_db_path())
+    index_factory = create_session_factory(index_engine)
 
     async def event_stream():
         try:
-            async with session_factory() as db:
+            async with session_factory() as db, index_factory() as idb:
                 # Build world book context
                 result = await db.execute(
                     select(WorldBookEntry)
@@ -279,7 +285,7 @@ async def assist_stream(story_id: str, request: Request):
                         "content": WORLD_ASSIST_SYSTEM_PROMPT + "\n\n这部小说目前还没有任何设定，请帮作者从零开始构建世界观。"
                     }
 
-                config = await get_model_config(db, ModelRole.world_analysis)
+                config = await get_model_config(idb, ModelRole.world_analysis)
                 if not config:
                     yield "data: [ERROR] 未配置世界书分析模型，请先在设置中配置\n\n"
                     return
@@ -295,6 +301,7 @@ async def assist_stream(story_id: str, request: Request):
             yield f"data: [ERROR] {str(e)}\n\n"
         finally:
             await engine.dispose()
+            await index_engine.dispose()
 
     return StreamingResponse(event_stream(), media_type="text/event-stream")
 

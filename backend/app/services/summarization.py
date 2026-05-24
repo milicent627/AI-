@@ -11,7 +11,7 @@ class SummarizationService:
     def __init__(self, registry: ProviderRegistry):
         self.registry = registry
 
-    async def check_and_summarize(self, db: AsyncSession, story_id: str) -> Summary | None:
+    async def check_and_summarize(self, db: AsyncSession, index_db: AsyncSession, story_id: str) -> Summary | None:
         story = await db.get(Story, story_id)
         if not story:
             return None
@@ -163,8 +163,8 @@ class SummarizationService:
 
     async def _get_small_summary_config(self, db: AsyncSession) -> ModelConfig | None:
         from ..utils.model_fallback import get_model_config
-        return await get_model_config(db, ModelRole.small_summary)
+        return await get_model_config(index_db, ModelRole.small_summary)
 
     async def _get_large_summary_config(self, db: AsyncSession) -> ModelConfig | None:
         from ..utils.model_fallback import get_model_config
-        return await get_model_config(db, ModelRole.large_summary)
+        return await get_model_config(index_db, ModelRole.large_summary)

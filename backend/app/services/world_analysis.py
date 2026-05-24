@@ -219,4 +219,4 @@ class WorldAnalysisService:
 
     async def _get_analysis_config(self, db: AsyncSession) -> ModelConfig | None:
         from ..utils.model_fallback import get_model_config
-        return await get_model_config(db, ModelRole.world_analysis)
+        return await get_model_config(index_db, ModelRole.world_analysis)

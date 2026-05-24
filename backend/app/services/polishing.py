@@ -16,7 +16,7 @@ class PolishingService:
             raise ValueError("Chapter not found or empty")
 
         from ..utils.model_fallback import get_model_config
-        config = await get_model_config(db, ModelRole.polishing)
+        config = await get_model_config(index_db, ModelRole.polishing)
         if not config:
             raise ValueError("No model configured for polishing")
 
@@ -47,7 +47,7 @@ class PolishingService:
     async def polish_stream(self, db: AsyncSession, index_db: AsyncSession, chapter_id: str, text: str):
         """Stream polish the given text."""
         from ..utils.model_fallback import get_model_config
-        config = await get_model_config(db, ModelRole.polishing)
+        config = await get_model_config(index_db, ModelRole.polishing)
         if not config:
             raise ValueError("No model configured for polishing")
 
