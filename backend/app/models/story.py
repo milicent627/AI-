@@ -32,6 +32,8 @@ class Story(Base):
     current_total_words: Mapped[int] = mapped_column(Integer, default=0)
     small_summary_chapter_count: Mapped[int] = mapped_column(Integer, default=10)
     large_summary_merge_count: Mapped[int] = mapped_column(Integer, default=3)
+    unsummarized_chapter_chars: Mapped[int] = mapped_column(Integer, default=3000)
+    unsummarized_summary_chars: Mapped[int] = mapped_column(Integer, default=3000)
     auto_hide_summarized: Mapped[bool] = mapped_column(default=True)
     world_book_name: Mapped[str] = mapped_column(String(200), default="")
     status: Mapped[StoryStatus] = mapped_column(SAEnum(StoryStatus), default=StoryStatus.ongoing)
@@ -73,7 +75,7 @@ class PromptOrderItem(Base):
     story_id: Mapped[str] = mapped_column(String(36), ForeignKey("stories.id"), nullable=False)
     function: Mapped[str] = mapped_column(String(50), default="continuation")  # continuation, polishing, small_summary, large_summary, world_analysis, foreshadowing
     sort_order: Mapped[int] = mapped_column(Integer, default=0)
-    item_type: Mapped[str] = mapped_column(String(30), default="fragment")  # fragment | world_entry | context_slot
+    item_type: Mapped[str] = mapped_column(String(30), default="fragment")  # fragment | world_entry | summary | foreshadowing | style_guide
     role: Mapped[str] = mapped_column(String(10), default="system")  # system | user
     source_id: Mapped[str | None] = mapped_column(String(36), nullable=True)  # fragment_id, entry_id, or slot key
     preset_id: Mapped[str | None] = mapped_column(String(36), nullable=True)  # only for fragment type

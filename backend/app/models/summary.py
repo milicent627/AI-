@@ -20,6 +20,7 @@ class Summary(Base):
     level: Mapped[int] = mapped_column(Integer, default=1)
     content: Mapped[str] = mapped_column(Text, default="")
     covered_chapter_ids: Mapped[list] = mapped_column(JSON, default=list)
+    covered_summary_ids: Mapped[list] = mapped_column(JSON, default=list)
     word_count_before: Mapped[int] = mapped_column(Integer, default=0)
     word_count_after: Mapped[int] = mapped_column(Integer, default=0)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)

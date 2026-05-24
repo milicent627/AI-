@@ -19,7 +19,7 @@ const FUNCTIONS = Object.keys(FUNCTION_LABELS);
 
 interface OrderItem {
   id: string;
-  item_type: 'fragment' | 'world_entry' | 'context_slot';
+  item_type: 'fragment' | 'world_entry' | 'summary' | 'foreshadowing' | 'style_guide';
   source_id: string;
   sort_order: number;
   role: 'system' | 'user';
@@ -110,26 +110,20 @@ export default function PromptOrderPage() {
     });
   };
 
+  const isFixedItem = (item: OrderItem): boolean => {
+    return item.item_type === 'summary' || item.item_type === 'foreshadowing' || item.item_type === 'style_guide';
+  };
+
   const handleDelete = (idx: number) => {
+    if (isFixedItem(items[idx])) {
+      alert('总结/伏笔/风格指南为固定条目，不能删除');
+      return;
+    }
     if (!confirm('确定删除此条目？')) return;
     setItems(prev => {
       const updated = prev.filter((_, i) => i !== idx);
       return updated.map((item, i) => ({ ...item, sort_order: i + 1 }));
     });
-  };
-
-  const handleAddSlot = () => {
-    const newItem: OrderItem = {
-      id: `new-slot-${Date.now()}`,
-      item_type: 'context_slot',
-      source_id: 'chapter_content',
-      sort_order: items.length + 1,
-      role: 'user',
-      is_active: true,
-      trigger_words: null,
-      content_local: '{章节正文}',
-    };
-    setItems(prev => [...prev, newItem]);
   };
 
   const handleAddFragment = () => {
@@ -159,10 +153,19 @@ export default function PromptOrderPage() {
   };
 
   const getDisplayContent = (item: OrderItem): string => {
-    if (item.item_type === 'context_slot') {
-      if (item.source_id === 'chapter_content') return '{章节正文}';
-      if (item.source_id === 'summaries') return '{总结}';
-      return `{${item.source_id}}`;
+    if (item.item_type === 'summary') {
+      const summaryLabels: Record<string, string> = {
+        chapter_content: '正文',
+        small_summaries: '小总结',
+        large_summary: '大总结',
+      };
+      return summaryLabels[item.source_id] || `总结 - ${item.source_id}`;
+    }
+    if (item.item_type === 'foreshadowing') {
+      return '活跃伏笔';
+    }
+    if (item.item_type === 'style_guide') {
+      return '风格指南';
     }
     if (item.item_type === 'world_entry') {
       return item.name || item.display_text || item.content_local || '(未命名)';
@@ -174,7 +177,9 @@ export default function PromptOrderPage() {
     switch (itemType) {
       case 'fragment': return '片段';
       case 'world_entry': return '世界书';
-      case 'context_slot': return '上下文';
+      case 'summary': return '总结';
+      case 'foreshadowing': return '伏笔';
+      case 'style_guide': return '风格';
       default: return itemType;
     }
   };
@@ -183,7 +188,9 @@ export default function PromptOrderPage() {
     switch (itemType) {
       case 'fragment': return 'bg-green-900/50 text-green-400 border-green-800';
       case 'world_entry': return 'bg-amber-900/50 text-amber-400 border-amber-800';
-      case 'context_slot': return 'bg-gray-700/50 text-gray-400 border-gray-600';
+      case 'summary': return 'bg-blue-900/50 text-blue-400 border-blue-800';
+      case 'foreshadowing': return 'bg-pink-900/50 text-pink-400 border-pink-800';
+      case 'style_guide': return 'bg-violet-900/50 text-violet-400 border-violet-800';
       default: return 'bg-gray-800 text-gray-400 border-gray-700';
     }
   };
@@ -246,12 +253,6 @@ export default function PromptOrderPage() {
           className="flex items-center gap-1 px-2.5 py-1.5 text-xs border border-gray-700 rounded-lg hover:border-green-600 hover:text-green-400 text-gray-400 transition-colors"
         >
           <Plus size={13} /> 片段
-        </button>
-        <button
-          onClick={handleAddSlot}
-          className="flex items-center gap-1 px-2.5 py-1.5 text-xs border border-gray-700 rounded-lg hover:border-blue-600 hover:text-blue-400 text-gray-400 transition-colors"
-        >
-          <Plus size={13} /> 上下文槽位
         </button>
         <div className="flex-1" />
         <span className="text-xs text-gray-600">{items.length} 条</span>

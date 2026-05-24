@@ -1,10 +1,7 @@
 from collections.abc import AsyncGenerator
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
-from ..models.story import Story, Chapter, ContinuationRecord, ChapterStatus
-from ..models.summary import Summary, SummaryType
-from ..models.world_book import WorldBookEntry, EntryCategory
-from ..models.foreshadowing import Foreshadowing, ForeshadowingStatus
+from ..models.story import Story, Chapter, ContinuationRecord
 from ..models.model_config import ModelConfig, ModelRole
 from ..providers.registry import ProviderRegistry
 from ..services.prompt_assembler import PromptAssembler
@@ -19,64 +16,6 @@ class ContinuationService:
     def __init__(self, registry: ProviderRegistry):
         self.registry = registry
 
-    async def _build_context_dict(self, db: AsyncSession, story_id: str, current_chapter_id: str) -> dict:
-        """Assemble runtime context data for the PromptAssembler."""
-        ctx = {}
-
-        story = await db.get(Story, story_id)
-        if story and story.style_guide:
-            ctx["style_guide"] = story.style_guide
-
-        result = await db.execute(
-            select(Chapter).where(
-                Chapter.story_id == story_id,
-                Chapter.id == current_chapter_id,
-            )
-        )
-        current_chapter = result.scalar_one_or_none()
-        if current_chapter and current_chapter.content:
-            ctx["chapter_content"] = current_chapter.content[-8000:]
-
-        result = await db.execute(
-            select(Summary)
-            .where(Summary.story_id == story_id, Summary.type == SummaryType.large)
-            .order_by(Summary.created_at.desc())
-            .limit(1)
-        )
-        large_summary = result.scalar_one_or_none()
-        if large_summary:
-            ctx["large_summary"] = large_summary.content
-
-        result = await db.execute(
-            select(Summary)
-            .where(Summary.story_id == story_id, Summary.type == SummaryType.small)
-            .order_by(Summary.level.desc())
-            .limit(3)
-        )
-        small_summaries = result.scalars().all()
-        if small_summaries:
-            ctx["recent_summaries"] = "\n".join(s.content for s in small_summaries)
-
-        result = await db.execute(
-            select(Foreshadowing)
-            .where(
-                Foreshadowing.story_id == story_id,
-                Foreshadowing.status.in_([ForeshadowingStatus.planted, ForeshadowingStatus.developing]),
-            )
-            .order_by(Foreshadowing.priority.desc())
-        )
-        foreshadowings = result.scalars().all()
-        if foreshadowings:
-            ctx["active_foreshadowings"] = "\n".join(
-                f"[{f.priority}] {f.title}: {f.description[:200]}" for f in foreshadowings
-            )
-
-        # trigger_text for world book entry matching
-        if current_chapter and current_chapter.content:
-            ctx["trigger_text"] = current_chapter.content[-4000:]
-
-        return ctx
-
     async def continue_story(
         self,
         db: AsyncSession,
@@ -89,14 +28,24 @@ class ContinuationService:
         branch_direction: str = "",
         target_words: int = 800,
     ) -> AsyncGenerator[str, None]:
-        ctx = await self._build_context_dict(db, story_id, chapter_id)
+        # Build trigger_text for world book entry matching
+        trigger_ctx = {}
+        result = await db.execute(
+            select(Chapter).where(
+                Chapter.story_id == story_id,
+                Chapter.id == chapter_id,
+            )
+        )
+        current_chapter = result.scalar_one_or_none()
+        if current_chapter and current_chapter.content:
+            trigger_ctx["trigger_text"] = current_chapter.content[-4000:]
 
         story = await db.get(Story, story_id)
         style_guide = story.style_guide if story else ""
 
         assembler = PromptAssembler()
         messages = await assembler.assemble(
-            db, index_db, story_id, "continuation", context=ctx
+            db, index_db, story_id, "continuation", context=trigger_ctx
         )
 
         if branch_point:

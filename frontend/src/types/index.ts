@@ -8,6 +8,8 @@ export interface Story {
   target_chapter_words: number;
   small_summary_chapter_count: number;
   large_summary_merge_count: number;
+  unsummarized_chapter_chars: number;
+  unsummarized_summary_chars: number;
   auto_hide_summarized: boolean;
   world_book_name: string;
   current_total_words: number;

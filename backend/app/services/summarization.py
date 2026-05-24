@@ -140,6 +140,7 @@ class SummarizationService:
             level=0,
             content=result.content,
             covered_chapter_ids=[c.id for c in small_summaries],
+            covered_summary_ids=[s.id for s in small_summaries],
             word_count_before=sum(s.word_count_before for s in small_summaries),
             word_count_after=len(result.content),
         )

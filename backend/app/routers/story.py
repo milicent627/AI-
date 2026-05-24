@@ -91,6 +91,8 @@ async def create_story(request: Request):
             target_chapter_words=data.get("target_chapter_words", 3000),
             small_summary_chapter_count=data.get("small_summary_chapter_count", 10),
             large_summary_merge_count=data.get("large_summary_merge_count", 3),
+            unsummarized_chapter_chars=data.get("unsummarized_chapter_chars", 3000),
+            unsummarized_summary_chars=data.get("unsummarized_summary_chars", 3000),
             auto_hide_summarized=data.get("auto_hide_summarized", True),
             world_book_name=data.get("world_book_name", ""),
         )
@@ -132,6 +134,8 @@ async def get_story(story_id: str):
             "target_chapter_words": story.target_chapter_words,
             "small_summary_chapter_count": story.small_summary_chapter_count,
             "large_summary_merge_count": story.large_summary_merge_count,
+            "unsummarized_chapter_chars": story.unsummarized_chapter_chars,
+            "unsummarized_summary_chars": story.unsummarized_summary_chars,
             "auto_hide_summarized": story.auto_hide_summarized,
             "current_total_words": story.current_total_words,
             "world_book_name": story.world_book_name or "",
@@ -158,7 +162,8 @@ async def update_story(story_id: str, request: Request):
 
         for field in ["title", "author", "genre", "synopsis", "style_guide",
                        "target_chapter_words", "small_summary_chapter_count",
-                       "large_summary_merge_count", "auto_hide_summarized", "status",
+                       "large_summary_merge_count", "unsummarized_chapter_chars",
+                       "unsummarized_summary_chars", "auto_hide_summarized", "status",
                        "world_book_name"]:
             if field in data:
                 setattr(story, field, data[field])
@@ -334,23 +339,40 @@ async def seed_order(story_id: str, request: Request):
             except Exception:
                 pass
 
-            # Add context slots
-            ctx_slots = []
+            # Add summary / foreshadowing / style_guide items per function
+            fixed_items = []
             if func == "continuation":
-                ctx_slots = [("style_guide", "system"), ("chapter_content", "user"), ("world_book_injected", "user"), ("recent_summaries", "user"), ("large_summary", "user"), ("active_foreshadowings", "system")]
+                fixed_items = [
+                    ("style_guide", "system"),
+                    ("summary", "chapter_content", "user"),
+                    ("summary", "small_summaries", "user"),
+                    ("summary", "large_summary", "user"),
+                    ("foreshadowing", "active", "system"),
+                ]
             elif func == "polishing":
-                ctx_slots = [("chapter_content", "user")]
+                fixed_items = [
+                    ("summary", "chapter_content", "user"),
+                ]
 
-            for slot_key, slot_role in ctx_slots:
-                items_to_add.append(PromptOrderItem(
-                    story_id=story_id,
-                    function=func,
-                    sort_order=order,
-                    item_type="context_slot",
-                    role=slot_role,
-                    source_id=slot_key,
-                    is_active=True,
-                ))
+            for item_def in fixed_items:
+                if item_def[0] == "style_guide":
+                    items_to_add.append(PromptOrderItem(
+                        story_id=story_id, function=func, sort_order=order,
+                        item_type="style_guide", role=item_def[1],
+                        source_id="style_guide", is_active=True,
+                    ))
+                elif item_def[0] == "summary":
+                    items_to_add.append(PromptOrderItem(
+                        story_id=story_id, function=func, sort_order=order,
+                        item_type="summary", role=item_def[2],
+                        source_id=item_def[1], is_active=True,
+                    ))
+                elif item_def[0] == "foreshadowing":
+                    items_to_add.append(PromptOrderItem(
+                        story_id=story_id, function=func, sort_order=order,
+                        item_type="foreshadowing", role=item_def[2],
+                        source_id="active", is_active=True,
+                    ))
                 order += 10
 
             # Add world book entries
