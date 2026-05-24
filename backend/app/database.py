@@ -1,5 +1,6 @@
 from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker, AsyncSession
 from sqlalchemy.orm import DeclarativeBase
+from sqlalchemy.pool import NullPool
 
 
 class Base(DeclarativeBase):
@@ -7,7 +8,11 @@ class Base(DeclarativeBase):
 
 
 def create_engine(db_path: str):
-    return create_async_engine(f"sqlite+aiosqlite:///{db_path}", echo=False)
+    return create_async_engine(
+        f"sqlite+aiosqlite:///{db_path}",
+        echo=False,
+        poolclass=NullPool,
+    )
 
 
 def create_session_factory(engine):
