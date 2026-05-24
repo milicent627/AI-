@@ -30,12 +30,13 @@ export default function SettingsPage() {
   // Model bundle state
   const [bundles, setBundles] = useState<any[]>([]);
   const [editingName, setEditingName] = useState<string | null>(null);
-  const [bundleForm, setBundleForm] = useState({ name: '', api_key: '', base_url: '' });
-  const [formRoles, setFormRoles] = useState<Record<string, { model_id: string; temperature: number; max_tokens: number }>>(
-    Object.fromEntries(ROLES.map(r => [r.value, { model_id: '', temperature: 0.8, max_tokens: 4096 }]))
+  const [bundleForm, setBundleForm] = useState({ name: '' });
+  const defaultRole = () => ({ model_id: '', api_key: '', base_url: '', temperature: 0.8, max_tokens: 4096 });
+  const [formRoles, setFormRoles] = useState<Record<string, ReturnType<typeof defaultRole>>>(
+    Object.fromEntries(ROLES.map(r => [r.value, defaultRole()]))
   );
-  const [fetchedModels, setFetchedModels] = useState<string[] | null>(null);
-  const [fetchingModels, setFetchingModels] = useState(false);
+  const [fetchedModels, setFetchedModels] = useState<Record<string, string[]>>({});
+  const [fetchingRole, setFetchingRole] = useState<string | null>(null);
   const [expandedBundle, setExpandedBundle] = useState<string | null>(null);
 
   // Prompt preset state
@@ -65,36 +66,38 @@ export default function SettingsPage() {
       const nonPresets = (d.models || []).filter((m: any) => !m.is_preset);
       const map: Record<string, any> = {};
       for (const m of nonPresets) {
-        if (!map[m.name]) map[m.name] = { name: m.name, api_key: m.api_key, base_url: m.base_url || '', roles: {} };
-        if (m.api_key && !map[m.name].api_key) map[m.name].api_key = m.api_key;
-        if (m.base_url && !map[m.name].base_url) map[m.name].base_url = m.base_url;
-        map[m.name].roles[m.role] = { id: m.id, model_id: m.model_id, temperature: m.temperature, max_tokens: m.max_tokens, is_active: m.is_active };
+        if (!map[m.name]) map[m.name] = { name: m.name, roles: {} };
+        map[m.name].roles[m.role] = { id: m.id, model_id: m.model_id, api_key: m.api_key, base_url: m.base_url || '', temperature: m.temperature, max_tokens: m.max_tokens, is_active: m.is_active };
       }
       setBundles(Object.values(map));
     }
   };
 
   const resetBundleForm = () => {
-    setBundleForm({ name: '', api_key: '', base_url: '' });
-    setFormRoles(Object.fromEntries(ROLES.map(r => [r.value, { model_id: '', temperature: 0.8, max_tokens: 4096 }])));
+    setBundleForm({ name: '' });
+    setFormRoles(Object.fromEntries(ROLES.map(r => [r.value, defaultRole()])));
     setEditingName(null);
-    setFetchedModels(null);
+    setFetchedModels({});
   };
 
   const editBundle = (bundle: any) => {
     setEditingName(bundle.name);
-    setBundleForm({ name: bundle.name, api_key: bundle.api_key || '', base_url: bundle.base_url || '' });
+    setBundleForm({ name: bundle.name });
     const roles: Record<string, any> = {};
     for (const r of ROLES) {
       const rc = bundle.roles[r.value];
-      roles[r.value] = rc ? { model_id: rc.model_id, temperature: rc.temperature, max_tokens: rc.max_tokens } : { model_id: '', temperature: 0.8, max_tokens: 4096 };
+      roles[r.value] = rc ? {
+        model_id: rc.model_id || '', api_key: rc.api_key || '', base_url: rc.base_url || '',
+        temperature: rc.temperature ?? 0.8, max_tokens: rc.max_tokens ?? 4096,
+      } : defaultRole();
     }
     setFormRoles(roles);
+    setFetchedModels({});
   };
 
   const saveBundle = async () => {
     if (!bundleForm.name) { alert('请填写名称'); return; }
-    await api.saveBundle({ ...bundleForm, roles: formRoles });
+    await api.saveBundle({ name: bundleForm.name, roles: formRoles });
     await refreshBundles();
     resetBundleForm();
   };
@@ -105,17 +108,17 @@ export default function SettingsPage() {
     await refreshBundles();
   };
 
-  const handleFetchModels = async () => {
-    if (!bundleForm.api_key || !bundleForm.base_url) { alert('请先填写 API Key 和 API URL'); return; }
-    setFetchingModels(true);
-    setFetchedModels(null);
+  const handleFetchModels = async (role: string) => {
+    const rc = formRoles[role];
+    if (!rc || !rc.api_key || !rc.base_url) { alert('请先填写该用途的 API Key 和 API URL'); return; }
+    setFetchingRole(role);
     try {
-      const result = await api.listProviderModels('custom', bundleForm.api_key, bundleForm.base_url);
-      setFetchedModels(result.models);
+      const result = await api.listProviderModels('custom', rc.api_key, rc.base_url);
+      setFetchedModels(prev => ({ ...prev, [role]: result.models }));
     } catch (err: any) {
       alert(`获取模型列表失败: ${err.message}`);
     } finally {
-      setFetchingModels(false);
+      setFetchingRole(null);
     }
   };
 
@@ -183,76 +186,71 @@ export default function SettingsPage() {
           {/* Bundle form */}
           <div className="bg-gray-900 border border-gray-800 rounded-xl p-5 mb-6">
             <h2 className="font-bold mb-4">{editingName ? `编辑: ${editingName}` : '添加模型组'}</h2>
-            <p className="text-xs text-gray-500 mb-4">一个模型组包含全部 6 个用途的配置。填入 API 连接信息后为每个用途指定模型和参数。</p>
 
-            {/* Shared credentials */}
-            <div className="grid grid-cols-3 gap-3 mb-4">
-              <div>
-                <label className="text-xs text-gray-500">名称</label>
-                <input className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm mt-1"
-                  placeholder="例如：GPT-4o" value={bundleForm.name}
-                  onChange={e => setBundleForm({ ...bundleForm, name: e.target.value })} />
-              </div>
-              <div>
-                <label className="text-xs text-gray-500">API Key</label>
-                <input type="password" className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm mt-1 font-mono"
-                  placeholder="sk-..." value={bundleForm.api_key}
-                  onChange={e => setBundleForm({ ...bundleForm, api_key: e.target.value })} />
-              </div>
-              <div>
-                <label className="text-xs text-gray-500">API URL</label>
-                <input type="text" className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm mt-1 font-mono"
-                  placeholder="https://api.openai.com" value={bundleForm.base_url}
-                  onChange={e => setBundleForm({ ...bundleForm, base_url: e.target.value })} />
-              </div>
-            </div>
-
-            {/* Fetch models button */}
-            <div className="flex items-center gap-2 mb-4">
-              <button onClick={handleFetchModels}
-                disabled={fetchingModels || !bundleForm.api_key || !bundleForm.base_url}
-                className="flex items-center gap-1 px-3 py-1 text-xs bg-gray-700 border border-gray-600 rounded-lg hover:bg-gray-600 disabled:opacity-40 disabled:cursor-not-allowed">
-                <RefreshCw size={12} className={fetchingModels ? 'animate-spin' : ''} />
-                获取模型列表
-              </button>
-              {fetchedModels && <span className="text-xs text-gray-500">{fetchedModels.length} 个可用模型</span>}
+            {/* Name */}
+            <div className="mb-4">
+              <label className="text-xs text-gray-500">名称</label>
+              <input className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm mt-1"
+                placeholder="例如：GPT-4o" value={bundleForm.name}
+                onChange={e => setBundleForm({ ...bundleForm, name: e.target.value })} />
             </div>
 
             {/* Per-role configs */}
             <div className="space-y-2">
               {ROLES.map(r => {
-                const role = formRoles[r.value] || { model_id: '', temperature: 0.8, max_tokens: 4096 };
+                const role = formRoles[r.value] || defaultRole();
+                const models = fetchedModels[r.value];
                 return (
-                  <div key={r.value} className="flex items-center gap-2 bg-gray-950 rounded-lg px-3 py-2">
-                    <span className="text-xs text-gray-400 w-28 shrink-0">{r.label}</span>
-                    {fetchedModels ? (
-                      <select className="flex-1 bg-gray-800 border border-gray-700 rounded px-2 py-1 text-xs"
-                        value={role.model_id}
-                        onChange={e => {
-                          const v = e.target.value;
-                          setFormRoles(prev => ({ ...prev, [r.value]: { ...prev[r.value], model_id: v === '__custom__' ? '' : v } }));
-                        }}>
-                        <option value="">默认</option>
-                        {fetchedModels.map(m => <option key={m} value={m}>{m}</option>)}
-                        <option value="__custom__">自定义...</option>
-                      </select>
-                    ) : (
-                      <input type="text" className="flex-1 bg-gray-800 border border-gray-700 rounded px-2 py-1 text-xs font-mono"
-                        placeholder="模型 ID，如 gpt-4o"
-                        value={role.model_id}
-                        onChange={e => setFormRoles(prev => ({ ...prev, [r.value]: { ...prev[r.value], model_id: e.target.value } }))} />
-                    )}
-                    <div className="flex items-center gap-1 shrink-0">
-                      <span className="text-xs text-gray-600">T</span>
-                      <input type="number" className="w-12 bg-gray-800 border border-gray-700 rounded px-1 py-0.5 text-xs text-center"
-                        value={role.temperature} step="0.1" min="0" max="2"
-                        onChange={e => setFormRoles(prev => ({ ...prev, [r.value]: { ...prev[r.value], temperature: parseFloat(e.target.value) || 0.8 } }))} />
+                  <div key={r.value} className="bg-gray-950 rounded-lg px-3 py-2 space-y-2">
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs text-gray-300 w-28 shrink-0 font-medium">{r.label}</span>
+                      {models ? (
+                        <select className="flex-1 bg-gray-800 border border-gray-700 rounded px-2 py-1 text-xs"
+                          value={role.model_id}
+                          onChange={e => {
+                            const v = e.target.value;
+                            setFormRoles(prev => ({ ...prev, [r.value]: { ...prev[r.value], model_id: v === '__custom__' ? '' : v } }));
+                          }}>
+                          <option value="">默认</option>
+                          {models.map((m: string) => <option key={m} value={m}>{m}</option>)}
+                          <option value="__custom__">自定义...</option>
+                        </select>
+                      ) : (
+                        <input type="text" className="flex-1 bg-gray-800 border border-gray-700 rounded px-2 py-1 text-xs font-mono"
+                          placeholder="模型 ID，如 gpt-4o"
+                          value={role.model_id}
+                          onChange={e => setFormRoles(prev => ({ ...prev, [r.value]: { ...prev[r.value], model_id: e.target.value } }))} />
+                      )}
+                      <button
+                        onClick={() => handleFetchModels(r.value)}
+                        disabled={fetchingRole === r.value || !role.api_key || !role.base_url}
+                        className="flex items-center gap-1 px-1.5 py-1 text-[10px] bg-gray-700 border border-gray-600 rounded hover:bg-gray-600 disabled:opacity-40 disabled:cursor-not-allowed shrink-0"
+                        title="获取模型列表"
+                      >
+                        <RefreshCw size={10} className={fetchingRole === r.value ? 'animate-spin' : ''} />
+                      </button>
+                      <div className="flex items-center gap-1 shrink-0">
+                        <span className="text-[10px] text-gray-300">T</span>
+                        <input type="number" className="w-11 bg-gray-800 border border-gray-700 rounded px-1 py-0.5 text-[10px] text-center"
+                          value={role.temperature} step="0.1" min="0" max="2"
+                          onChange={e => setFormRoles(prev => ({ ...prev, [r.value]: { ...prev[r.value], temperature: parseFloat(e.target.value) || 0.8 } }))} />
+                      </div>
+                      <div className="flex items-center gap-1 shrink-0">
+                        <span className="text-[10px] text-gray-300">MT</span>
+                        <input type="number" className="w-14 bg-gray-800 border border-gray-700 rounded px-1 py-0.5 text-[10px] text-center"
+                          value={role.max_tokens} step="100"
+                          onChange={e => setFormRoles(prev => ({ ...prev, [r.value]: { ...prev[r.value], max_tokens: parseInt(e.target.value) || 4096 } }))} />
+                      </div>
                     </div>
-                    <div className="flex items-center gap-1 shrink-0">
-                      <span className="text-xs text-gray-600">MT</span>
-                      <input type="number" className="w-16 bg-gray-800 border border-gray-700 rounded px-1 py-0.5 text-xs text-center"
-                        value={role.max_tokens} step="100"
-                        onChange={e => setFormRoles(prev => ({ ...prev, [r.value]: { ...prev[r.value], max_tokens: parseInt(e.target.value) || 4096 } }))} />
+                    <div className="flex gap-2">
+                      <input type="password" className="flex-1 bg-gray-800 border border-gray-700 rounded px-2 py-0.5 text-[10px] font-mono"
+                        placeholder={`${r.label} API Key`}
+                        value={role.api_key}
+                        onChange={e => setFormRoles(prev => ({ ...prev, [r.value]: { ...prev[r.value], api_key: e.target.value } }))} />
+                      <input type="text" className="flex-1 bg-gray-800 border border-gray-700 rounded px-2 py-0.5 text-[10px] font-mono"
+                        placeholder={`${r.label} API URL (如 https://api.openai.com)`}
+                        value={role.base_url}
+                        onChange={e => setFormRoles(prev => ({ ...prev, [r.value]: { ...prev[r.value], base_url: e.target.value } }))} />
                     </div>
                   </div>
                 );
@@ -278,9 +276,9 @@ export default function SettingsPage() {
                   <div className="p-3 flex items-center justify-between cursor-pointer hover:bg-gray-850 group"
                     onClick={() => setExpandedBundle(isExpanded ? null : b.name)}>
                     <div className="flex items-center gap-2">
-                      {isExpanded ? <ChevronDown size={14} className="text-gray-500" /> : <ChevronRight size={14} className="text-gray-600" />}
+                      {isExpanded ? <ChevronDown size={14} className="text-gray-500" /> : <ChevronRight size={14} className="text-gray-300" />}
                       <span className="font-medium">{b.name}</span>
-                      <span className="text-xs text-gray-600">{roleCount}/6 个用途已配置</span>
+                      <span className="text-xs text-gray-300">{roleCount}/6 个用途已配置</span>
                     </div>
                     <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity" onClick={e => e.stopPropagation()}>
                       <button onClick={() => editBundle(b)} className="p-1 hover:bg-gray-800 rounded text-gray-400">✏️</button>
@@ -288,23 +286,27 @@ export default function SettingsPage() {
                     </div>
                   </div>
                   {isExpanded && (
-                    <div className="border-t border-gray-800 px-4 py-2 space-y-1">
-                      <div className="text-xs text-gray-600 mb-1">
-                        {b.base_url && <span>API: {b.base_url}</span>}
-                      </div>
+                    <div className="border-t border-gray-800 px-4 py-2 space-y-2">
                       {ROLES.map(r => {
                         const rc = b.roles[r.value];
                         return (
-                          <div key={r.value} className="flex items-center gap-2 text-xs">
-                            <span className="text-gray-400 w-28">{r.label}</span>
-                            {rc ? (
-                              <>
-                                <span className="text-gray-300 font-mono">{rc.model_id || '(默认)'}</span>
-                                <span className="text-gray-600">T: {rc.temperature}</span>
-                                <span className="text-gray-600">MT: {rc.max_tokens}</span>
-                              </>
-                            ) : (
-                              <span className="text-gray-700">未配置</span>
+                          <div key={r.value} className="text-xs">
+                            <div className="flex items-center gap-2">
+                              <span className="text-gray-400 w-28">{r.label}</span>
+                              {rc ? (
+                                <>
+                                  <span className="text-gray-300 font-mono">{rc.model_id || '(默认)'}</span>
+                                  <span className="text-gray-300">T: {rc.temperature}</span>
+                                  <span className="text-gray-300">MT: {rc.max_tokens}</span>
+                                </>
+                              ) : (
+                                <span className="text-gray-200">未配置</span>
+                              )}
+                            </div>
+                            {rc?.base_url && (
+                              <div className="text-[10px] text-gray-300 mt-0.5 ml-28 font-mono truncate">
+                                {rc.base_url}
+                              </div>
                             )}
                           </div>
                         );
@@ -315,7 +317,7 @@ export default function SettingsPage() {
               );
             })}
             {bundles.length === 0 && (
-              <p className="text-gray-600 text-sm p-4 text-center border border-dashed border-gray-800 rounded-lg">
+              <p className="text-gray-300 text-sm p-4 text-center border border-dashed border-gray-800 rounded-lg">
                 还没有配置任何模型组 — 请在上方添加
               </p>
             )}
@@ -380,7 +382,7 @@ export default function SettingsPage() {
                     onClick={() => setExpandedPreset(isExpanded ? null : p.id)}
                   >
                     <div className="flex items-center gap-2">
-                      {isExpanded ? <ChevronDown size={14} className="text-gray-500" /> : <ChevronUp size={14} className="text-gray-600" />}
+                      {isExpanded ? <ChevronDown size={14} className="text-gray-500" /> : <ChevronUp size={14} className="text-gray-300" />}
                       {editingPresetName === p.id ? (
                         <input
                           className="bg-gray-700 border border-gray-600 rounded px-2 py-0.5 text-xs font-medium w-40"
@@ -407,8 +409,8 @@ export default function SettingsPage() {
                         }} title={p.is_default ? '内置预设不可重命名' : '点击重命名'}>{p.name}</span>
                       )}
                       {p.is_default && <span className="text-xs bg-blue-900/50 text-blue-400 px-1.5 py-0.5 rounded">内置</span>}
-                      <span className="text-xs text-gray-600">{PROMPT_ROLES.find(r => r.value === p.role)?.label}</span>
-                      <span className="text-xs text-gray-700">({p.fragments?.length || 0} 条)</span>
+                      <span className="text-xs text-gray-300">{PROMPT_ROLES.find(r => r.value === p.role)?.label}</span>
+                      <span className="text-xs text-gray-200">({p.fragments?.length || 0} 条)</span>
                     </div>
                     {!p.is_default && (
                       <button onClick={(e) => { e.stopPropagation(); deletePrompt(p.id); }}
@@ -442,9 +444,9 @@ export default function SettingsPage() {
                                   refreshPrompts();
                                 }}
                                 disabled={idx === 0}
-                                className="text-gray-600 hover:text-gray-300 disabled:opacity-30"
+                                className="text-gray-300 hover:text-gray-300 disabled:opacity-30"
                               ><ChevronUp size={12} /></button>
-                              <GripVertical size={12} className="text-gray-700" />
+                              <GripVertical size={12} className="text-gray-200" />
                               <button
                                 onClick={async () => {
                                   const frags = [...(p.fragments || [])].sort((a, b) => a.sort_order - b.sort_order);
@@ -455,7 +457,7 @@ export default function SettingsPage() {
                                   refreshPrompts();
                                 }}
                                 disabled={idx >= (p.fragments || []).length - 1}
-                                className="text-gray-600 hover:text-gray-300 disabled:opacity-30"
+                                className="text-gray-300 hover:text-gray-300 disabled:opacity-30"
                               ><ChevronDown size={12} /></button>
                             </div>
 
@@ -500,7 +502,7 @@ export default function SettingsPage() {
                             {!p.is_default && (
                               <button
                                 onClick={async () => { await api.deleteFragment(p.id, frag.id); refreshPrompts(); }}
-                                className="text-gray-700 hover:text-red-400"
+                                className="text-gray-200 hover:text-red-400"
                               ><Trash2 size={12} /></button>
                             )}
                           </div>
@@ -538,7 +540,7 @@ export default function SettingsPage() {
               );
             })}
             {promptPresets.length === 0 && (
-              <p className="text-gray-600 text-sm p-4 text-center border border-dashed border-gray-800 rounded-lg">暂无提示词预设</p>
+              <p className="text-gray-300 text-sm p-4 text-center border border-dashed border-gray-800 rounded-lg">暂无提示词预设</p>
             )}
           </div>
         </>

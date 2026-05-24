@@ -142,13 +142,13 @@ export default function WorldBookEditPage() {
   };
 
   return (
-    <div className="h-screen flex flex-col bg-white">
-      <header className="border-b border-gray-200 px-6 py-3 flex items-center justify-between shrink-0">
+    <div className="h-screen flex flex-col bg-gray-950">
+      <header className="border-b border-gray-800 px-6 py-3 flex items-center justify-between shrink-0">
         <div className="flex items-center gap-3">
-          <button onClick={() => navigate(-1)} className="p-1 hover:bg-gray-100 rounded text-gray-500">
+          <button onClick={() => navigate(-1)} className="p-1 hover:bg-gray-800 rounded text-gray-400">
             <ArrowLeft size={18} />
           </button>
-          <h1 className="text-lg font-semibold text-gray-800">
+          <h1 className="text-lg font-semibold text-gray-100">
             {isNew ? '创建新条目' : '编辑条目'}
           </h1>
         </div>
@@ -156,7 +156,7 @@ export default function WorldBookEditPage() {
           {!isNew && (
             <button
               onClick={handleDelete}
-              className="flex items-center gap-1 px-3 py-1.5 text-sm border border-red-200 text-red-600 rounded-lg hover:bg-red-50"
+              className="flex items-center gap-1 px-3 py-1.5 text-sm border border-red-800 text-red-400 rounded-lg hover:bg-red-900/30"
             >
               <Trash2 size={14} /> 删除
             </button>
@@ -177,20 +177,20 @@ export default function WorldBookEditPage() {
           <section className="space-y-4">
             <div className="grid grid-cols-3 gap-4">
               <div className="col-span-2">
-                <label className="block text-xs font-medium text-gray-500 mb-1">名称</label>
+                <label className="block text-xs font-medium text-gray-400 mb-1">名称</label>
                 <input
                   value={form.name}
                   onChange={update('name')}
-                  className="w-full bg-white border border-gray-200 rounded-lg px-3 py-2 text-sm outline-none focus:border-blue-500 text-gray-800"
+                  className="w-full bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-sm outline-none focus:border-blue-500 text-gray-100"
                   placeholder="条目名称"
                 />
               </div>
               <div>
-                <label className="block text-xs font-medium text-gray-500 mb-1">重要性</label>
+                <label className="block text-xs font-medium text-gray-400 mb-1">重要性</label>
                 <select
                   value={form.importance}
                   onChange={(e) => setForm({ ...form, importance: Number(e.target.value) })}
-                  className="w-full bg-white border border-gray-200 rounded-lg px-3 py-2 text-sm outline-none focus:border-blue-500 text-gray-800"
+                  className="w-full bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-sm outline-none focus:border-blue-500 text-gray-100"
                 >
                   {[1, 2, 3, 4, 5].map((n) => (
                     <option key={n} value={n}>{'★'.repeat(n)}</option>
@@ -201,11 +201,11 @@ export default function WorldBookEditPage() {
 
             <div className="grid grid-cols-3 gap-4">
               <div>
-                <label className="block text-xs font-medium text-gray-500 mb-1">分类</label>
+                <label className="block text-xs font-medium text-gray-400 mb-1">分类</label>
                 <select
                   value={form.category}
                   onChange={update('category')}
-                  className="w-full bg-white border border-gray-200 rounded-lg px-3 py-2 text-sm outline-none focus:border-blue-500 text-gray-800"
+                  className="w-full bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-sm outline-none focus:border-blue-500 text-gray-100"
                 >
                   {CATEGORY_OPTIONS.map((c) => (
                     <option key={c.value} value={c.value}>{c.label}</option>
@@ -213,11 +213,11 @@ export default function WorldBookEditPage() {
                 </select>
               </div>
               <div>
-                <label className="block text-xs font-medium text-gray-500 mb-1">状态</label>
+                <label className="block text-xs font-medium text-gray-400 mb-1">状态</label>
                 <select
                   value={form.status}
                   onChange={update('status')}
-                  className="w-full bg-white border border-gray-200 rounded-lg px-3 py-2 text-sm outline-none focus:border-blue-500 text-gray-800"
+                  className="w-full bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-sm outline-none focus:border-blue-500 text-gray-100"
                 >
                   {STATUS_OPTIONS.map((s) => (
                     <option key={s.value} value={s.value}>{s.label}</option>
@@ -225,32 +225,32 @@ export default function WorldBookEditPage() {
                 </select>
               </div>
               <div>
-                <label className="block text-xs font-medium text-gray-500 mb-1">排序</label>
+                <label className="block text-xs font-medium text-gray-400 mb-1">排序</label>
                 <input
                   type="number"
                   value={form.sort_order}
                   onChange={(e) => setForm({ ...form, sort_order: Number(e.target.value) })}
-                  className="w-full bg-white border border-gray-200 rounded-lg px-3 py-2 text-sm outline-none focus:border-blue-500 text-gray-800"
+                  className="w-full bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-sm outline-none focus:border-blue-500 text-gray-100"
                 />
               </div>
             </div>
 
             <div>
-              <label className="block text-xs font-medium text-gray-500 mb-1">描述</label>
+              <label className="block text-xs font-medium text-gray-400 mb-1">描述</label>
               <textarea
                 value={form.description}
                 onChange={update('description')}
-                className="w-full bg-white border border-gray-200 rounded-lg px-3 py-2 text-sm h-32 resize-none outline-none focus:border-blue-500 text-gray-800"
+                className="w-full bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-sm h-32 resize-none outline-none focus:border-blue-500 text-gray-100"
                 placeholder="详细描述..."
               />
             </div>
 
             <div>
-              <label className="block text-xs font-medium text-gray-500 mb-1">别名（逗号分隔）</label>
+              <label className="block text-xs font-medium text-gray-400 mb-1">别名（逗号分隔）</label>
               <input
                 value={form.aliases}
                 onChange={update('aliases')}
-                className="w-full bg-white border border-gray-200 rounded-lg px-3 py-2 text-sm outline-none focus:border-blue-500 text-gray-800"
+                className="w-full bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-sm outline-none focus:border-blue-500 text-gray-100"
                 placeholder="别名1, 别名2"
               />
             </div>
@@ -258,16 +258,16 @@ export default function WorldBookEditPage() {
 
           {/* Character-specific fields */}
           {form.category === 'character' && (
-            <section className="space-y-4 pt-6 border-t border-gray-100">
-              <h2 className="text-sm font-semibold text-gray-600">角色属性</h2>
+            <section className="space-y-4 pt-6 border-t border-gray-800">
+              <h2 className="text-sm font-semibold text-gray-300">角色属性</h2>
 
               <div className="grid grid-cols-3 gap-4">
                 <div>
-                  <label className="block text-xs font-medium text-gray-500 mb-1">性别</label>
+                  <label className="block text-xs font-medium text-gray-400 mb-1">性别</label>
                   <select
                     value={form.gender}
                     onChange={update('gender')}
-                    className="w-full bg-white border border-gray-200 rounded-lg px-3 py-2 text-sm outline-none focus:border-blue-500 text-gray-800"
+                    className="w-full bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-sm outline-none focus:border-blue-500 text-gray-100"
                   >
                     <option value="">未知</option>
                     <option value="男">男</option>
@@ -276,61 +276,61 @@ export default function WorldBookEditPage() {
                   </select>
                 </div>
                 <div>
-                  <label className="block text-xs font-medium text-gray-500 mb-1">年龄</label>
+                  <label className="block text-xs font-medium text-gray-400 mb-1">年龄</label>
                   <input
                     value={form.age}
                     onChange={update('age')}
-                    className="w-full bg-white border border-gray-200 rounded-lg px-3 py-2 text-sm outline-none focus:border-blue-500 text-gray-800"
+                    className="w-full bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-sm outline-none focus:border-blue-500 text-gray-100"
                     placeholder="年龄"
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-medium text-gray-500 mb-1">身份/职业</label>
+                  <label className="block text-xs font-medium text-gray-400 mb-1">身份/职业</label>
                   <input
                     value={form.identity}
                     onChange={update('identity')}
-                    className="w-full bg-white border border-gray-200 rounded-lg px-3 py-2 text-sm outline-none focus:border-blue-500 text-gray-800"
+                    className="w-full bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-sm outline-none focus:border-blue-500 text-gray-100"
                     placeholder="身份"
                   />
                 </div>
               </div>
 
               <div>
-                <label className="block text-xs font-medium text-gray-500 mb-1">外貌描述</label>
+                <label className="block text-xs font-medium text-gray-400 mb-1">外貌描述</label>
                 <textarea
                   value={form.appearance}
                   onChange={update('appearance')}
-                  className="w-full bg-white border border-gray-200 rounded-lg px-3 py-2 text-sm h-20 resize-none outline-none focus:border-blue-500 text-gray-800"
+                  className="w-full bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-sm h-20 resize-none outline-none focus:border-blue-500 text-gray-100"
                   placeholder="外貌特征..."
                 />
               </div>
 
               <div>
-                <label className="block text-xs font-medium text-gray-500 mb-1">性格标签（逗号分隔）</label>
+                <label className="block text-xs font-medium text-gray-400 mb-1">性格标签（逗号分隔）</label>
                 <input
                   value={form.personality}
                   onChange={update('personality')}
-                  className="w-full bg-white border border-gray-200 rounded-lg px-3 py-2 text-sm outline-none focus:border-blue-500 text-gray-800"
+                  className="w-full bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-sm outline-none focus:border-blue-500 text-gray-100"
                   placeholder="勇敢, 善良, 冷酷"
                 />
               </div>
 
               <div>
-                <label className="block text-xs font-medium text-gray-500 mb-1">能力/技能（逗号分隔）</label>
+                <label className="block text-xs font-medium text-gray-400 mb-1">能力/技能（逗号分隔）</label>
                 <input
                   value={form.abilities}
                   onChange={update('abilities')}
-                  className="w-full bg-white border border-gray-200 rounded-lg px-3 py-2 text-sm outline-none focus:border-blue-500 text-gray-800"
+                  className="w-full bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-sm outline-none focus:border-blue-500 text-gray-100"
                   placeholder="剑术精通, 火焰魔法"
                 />
               </div>
 
               <div>
-                <label className="block text-xs font-medium text-gray-500 mb-1">口头禅（逗号分隔）</label>
+                <label className="block text-xs font-medium text-gray-400 mb-1">口头禅（逗号分隔）</label>
                 <input
                   value={form.catchphrases}
                   onChange={update('catchphrases')}
-                  className="w-full bg-white border border-gray-200 rounded-lg px-3 py-2 text-sm outline-none focus:border-blue-500 text-gray-800"
+                  className="w-full bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-sm outline-none focus:border-blue-500 text-gray-100"
                   placeholder='"那就这样吧"'
                 />
               </div>

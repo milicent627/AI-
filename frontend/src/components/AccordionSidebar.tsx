@@ -24,25 +24,25 @@ export function AccordionSidebar({
   onAIAssistClick,
 }: AccordionSidebarProps) {
   return (
-    <div className="flex flex-col h-full bg-gray-50">
-      <div className="flex-1 overflow-y-auto border-r border-gray-200">
+    <div className="flex flex-col h-full bg-gray-900">
+      <div className="flex-1 overflow-y-auto border-r border-gray-800">
         {sections.map((section) => {
           const isOpen = activeSection === section.id;
           return (
-            <div key={section.id} className="border-b border-gray-200">
+            <div key={section.id} className="border-b border-gray-800">
               <button
                 onClick={() => onSectionChange(isOpen ? null : section.id)}
                 className={`w-full flex items-center justify-between px-3 py-2.5 text-sm transition-colors ${
                   isOpen
-                    ? 'bg-white text-gray-800 font-medium'
-                    : 'text-gray-600 hover:bg-gray-100'
+                    ? 'bg-gray-950 text-gray-100 font-medium'
+                    : 'text-gray-300 hover:bg-gray-800'
                 }`}
               >
                 <span className="flex items-center gap-2">
                   <span className="shrink-0">{section.icon}</span>
                   <span>{section.label}</span>
                   {section.badge != null && section.badge > 0 && (
-                    <span className="text-xs bg-gray-200 text-gray-500 px-1.5 py-0.5 rounded-full">
+                    <span className="text-xs bg-gray-700 text-gray-400 px-1.5 py-0.5 rounded-full">
                       {section.badge}
                     </span>
                   )}
@@ -62,10 +62,10 @@ export function AccordionSidebar({
         })}
       </div>
 
-      <div className="border-t border-r border-gray-200 p-2">
+      <div className="border-t border-r border-gray-800 p-2">
         <button
           onClick={onAIAssistClick}
-          className="w-full flex items-center justify-center gap-2 px-3 py-2 text-sm text-blue-600 bg-blue-50 rounded-lg hover:bg-blue-100 transition-colors"
+          className="w-full flex items-center justify-center gap-2 px-3 py-2 text-sm text-blue-400 bg-blue-900/30 rounded-lg hover:bg-blue-900/50 transition-colors"
         >
           <MessageSquare size={16} /> AI助手
         </button>

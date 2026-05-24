@@ -15,18 +15,18 @@ export function ChapterList({ chapters, currentChapterId, onSelect }: ChapterLis
           onClick={() => onSelect(ch)}
           className={`w-full text-left px-3 py-2 rounded-lg text-sm transition-colors ${
             currentChapterId === ch.id
-              ? 'bg-blue-50 text-blue-700'
-              : 'hover:bg-gray-50 text-gray-600'
+              ? 'bg-blue-900/30 text-blue-300'
+              : 'hover:bg-gray-800 text-gray-300'
           }`}
         >
           <div className="flex items-center justify-between">
             <span className="truncate">
               {ch.chapter_number}. {ch.title || `第${ch.chapter_number}章`}
             </span>
-            <span className="text-xs text-gray-400">{ch.word_count}字</span>
+            <span className="text-xs text-gray-500">{ch.word_count}字</span>
           </div>
           {ch.branch_name !== '主线' && (
-            <span className="text-xs text-amber-600 ml-1">[{ch.branch_name}]</span>
+            <span className="text-xs text-amber-400 ml-1">[{ch.branch_name}]</span>
           )}
         </button>
       ))}

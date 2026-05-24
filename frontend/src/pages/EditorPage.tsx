@@ -238,7 +238,7 @@ export default function EditorPage() {
   ];
 
   return (
-    <div className="h-screen flex flex-col bg-white">
+    <div className="h-screen flex flex-col bg-gray-950">
       <TopToolbar
         title={currentStory?.title || '加载中...'}
         storyId={storyId || ''}
@@ -265,7 +265,7 @@ export default function EditorPage() {
         <div
           onMouseDown={onMouseDown}
           className={`w-1 cursor-col-resize shrink-0 transition-colors ${
-            isDragging ? 'bg-blue-500' : 'bg-gray-200 hover:bg-blue-400'
+            isDragging ? 'bg-blue-500' : 'bg-gray-700 hover:bg-blue-400'
           }`}
         />
 

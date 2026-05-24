@@ -126,14 +126,12 @@ async def list_bundles():
             for c in configs:
                 name = c.name
                 if name not in bundles:
-                    bundles[name] = {"name": name, "api_key": c.api_key, "base_url": c.base_url or "", "roles": {}}
-                if c.api_key and not bundles[name]["api_key"]:
-                    bundles[name]["api_key"] = c.api_key
-                if c.base_url and not bundles[name]["base_url"]:
-                    bundles[name]["base_url"] = c.base_url
+                    bundles[name] = {"name": name, "roles": {}}
                 bundles[name]["roles"][c.role.value] = {
                     "id": c.id,
                     "model_id": c.model_id,
+                    "api_key": c.api_key,
+                    "base_url": c.base_url or "",
                     "temperature": c.temperature,
                     "max_tokens": c.max_tokens,
                     "is_active": c.is_active,
@@ -152,8 +150,8 @@ async def save_bundle(request: Request):
     if not name:
         raise HTTPException(status_code=400, detail="name is required")
 
-    api_key = data.get("api_key", "")
-    base_url = data.get("base_url", "")
+    shared_api_key = data.get("api_key", "")
+    shared_base_url = data.get("base_url", "")
     roles_data = data.get("roles", {})
 
     engine = await _ensure_index_db()
@@ -167,10 +165,12 @@ async def save_bundle(request: Request):
 
             for role_name in ROLE_NAMES:
                 role_config = roles_data.get(role_name, {})
+                role_api_key = role_config.get("api_key") or shared_api_key
+                role_base_url = role_config.get("base_url") or shared_base_url
                 if role_name in existing:
                     c = existing[role_name]
-                    c.api_key = api_key
-                    c.base_url = base_url
+                    c.api_key = role_api_key
+                    c.base_url = role_base_url
                     c.model_id = role_config.get("model_id", c.model_id)
                     c.temperature = role_config.get("temperature", c.temperature)
                     c.max_tokens = role_config.get("max_tokens", c.max_tokens)
@@ -181,8 +181,8 @@ async def save_bundle(request: Request):
                         name=name,
                         provider="custom",
                         model_id=role_config.get("model_id", ""),
-                        api_key=api_key,
-                        base_url=base_url,
+                        api_key=role_api_key,
+                        base_url=role_base_url,
                         role=role_name,
                         temperature=role_config.get("temperature", 0.8),
                         max_tokens=role_config.get("max_tokens", 4096),

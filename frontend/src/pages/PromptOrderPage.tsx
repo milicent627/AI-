@@ -227,7 +227,7 @@ export default function PromptOrderPage() {
             <ArrowLeft size={18} />
           </button>
           <h1 className="font-bold text-sm">提示词排序管理</h1>
-          <span className="text-xs text-gray-600">
+          <span className="text-xs text-gray-300">
             {FUNCTION_LABELS[func] || func}
           </span>
         </div>
@@ -281,7 +281,7 @@ export default function PromptOrderPage() {
           <Plus size={13} /> 片段
         </button>
         <div className="flex-1" />
-        <span className="text-xs text-gray-600">{items.length} 条</span>
+        <span className="text-xs text-gray-300">{items.length} 条</span>
       </div>
 
       {/* Content */}
@@ -304,7 +304,7 @@ export default function PromptOrderPage() {
                 >
                   {/* Drag handle */}
                   <button
-                    className="text-gray-700 hover:text-gray-400 cursor-grab flex-shrink-0"
+                    className="text-gray-200 hover:text-gray-200 cursor-grab flex-shrink-0"
                     title="拖拽排序"
                   >
                     <GripVertical size={14} />
@@ -369,14 +369,14 @@ export default function PromptOrderPage() {
                   {/* Content preview and trigger words */}
                   <div className="flex-1 min-w-0">
                     <div
-                      className={`text-xs truncate ${item.is_active ? 'text-gray-300' : 'text-gray-600 italic'}`}
+                      className={`text-xs truncate ${item.is_active ? 'text-gray-300' : 'text-gray-300 italic'}`}
                       title={getDisplayContent(item)}
                     >
                       {getDisplayContent(item)}
                     </div>
                     {item.item_type === 'world_entry' && item.trigger_words && item.trigger_words.length > 0 && (
                       <div className="flex items-center gap-1 mt-0.5 flex-wrap">
-                        <span className="text-[10px] text-gray-600">触发:</span>
+                        <span className="text-[10px] text-gray-300">触发:</span>
                         {editTriggerId === item.id ? (
                           <input
                             autoFocus
@@ -425,7 +425,7 @@ export default function PromptOrderPage() {
                           setEditTriggerId(item.id);
                           setEditTriggerVal('');
                         }}
-                        className="text-[10px] text-gray-700 hover:text-gray-500 mt-0.5"
+                        className="text-[10px] text-gray-200 hover:text-gray-300 mt-0.5"
                       >
                         + 添加触发词
                       </button>
@@ -436,7 +436,7 @@ export default function PromptOrderPage() {
                   <button
                     onClick={() => handleToggleActive(idx)}
                     className={`flex-shrink-0 p-0.5 rounded hover:bg-gray-800 transition-colors ${
-                      item.is_active ? 'text-green-500' : 'text-gray-700 hover:text-gray-500'
+                      item.is_active ? 'text-green-500' : 'text-gray-200 hover:text-gray-300'
                     }`}
                     title={item.is_active ? '已启用' : '已禁用'}
                   >
@@ -448,7 +448,7 @@ export default function PromptOrderPage() {
                     <button
                       onClick={() => handleMove(idx, -1)}
                       disabled={idx === 0}
-                      className="text-gray-600 hover:text-gray-300 disabled:opacity-20 disabled:cursor-not-allowed p-0.5 rounded hover:bg-gray-800"
+                      className="text-gray-300 hover:text-gray-300 disabled:opacity-20 disabled:cursor-not-allowed p-0.5 rounded hover:bg-gray-800"
                       title="上移"
                     >
                       <ChevronUp size={13} />
@@ -456,7 +456,7 @@ export default function PromptOrderPage() {
                     <button
                       onClick={() => handleMove(idx, 1)}
                       disabled={idx >= items.length - 1}
-                      className="text-gray-600 hover:text-gray-300 disabled:opacity-20 disabled:cursor-not-allowed p-0.5 rounded hover:bg-gray-800"
+                      className="text-gray-300 hover:text-gray-300 disabled:opacity-20 disabled:cursor-not-allowed p-0.5 rounded hover:bg-gray-800"
                       title="下移"
                     >
                       <ChevronDown size={13} />
@@ -466,7 +466,7 @@ export default function PromptOrderPage() {
                   {/* Delete button */}
                   <button
                     onClick={() => handleDelete(idx)}
-                    className="flex-shrink-0 p-0.5 rounded hover:bg-red-900/50 text-gray-600 hover:text-red-400 transition-colors"
+                    className="flex-shrink-0 p-0.5 rounded hover:bg-red-900/50 text-gray-300 hover:text-red-400 transition-colors"
                     title="删除"
                   >
                     <Trash2 size={13} />
@@ -486,7 +486,7 @@ export default function PromptOrderPage() {
               <div className="flex items-center gap-2">
                 <MessageSquare size={16} className="text-purple-400" />
                 <h2 className="font-bold text-sm">组装后的提示词 — {FUNCTION_LABELS[func] || func}</h2>
-                <span className="text-xs text-gray-600">{previewMessages.length} 条消息</span>
+                <span className="text-xs text-gray-300">{previewMessages.length} 条消息</span>
               </div>
               <button onClick={() => setShowPreview(false)} className="p-1 hover:bg-gray-800 rounded text-gray-400 hover:text-gray-200">
                 <X size={18} />

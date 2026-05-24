@@ -69,7 +69,7 @@ export default function HomePage() {
 
       <main className="flex-1 overflow-auto p-6">
         {stories.length === 0 ? (
-          <div className="flex flex-col items-center justify-center h-full text-gray-600">
+          <div className="flex flex-col items-center justify-center h-full text-gray-300">
             <BookOpen size={64} strokeWidth={1} />
             <p className="mt-4 text-lg">还没有故事，点击上方按钮创建一个吧</p>
           </div>

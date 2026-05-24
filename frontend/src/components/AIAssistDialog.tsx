@@ -54,19 +54,19 @@ export function AIAssistDialog({ isOpen, onClose, storyId }: AIAssistDialogProps
   return (
     <div className="fixed inset-0 z-50 flex items-start justify-end p-4 pt-16">
       <div className="absolute inset-0 bg-black/20" onClick={onClose} />
-      <div className="relative bg-white rounded-2xl shadow-xl border border-gray-200 w-full max-w-md h-[520px] flex flex-col">
-        <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100">
-          <div className="flex items-center gap-2 text-sm font-semibold text-gray-700">
+      <div className="relative bg-gray-950 rounded-2xl shadow-xl border border-gray-800 w-full max-w-md h-[520px] flex flex-col">
+        <div className="flex items-center justify-between px-4 py-3 border-b border-gray-800">
+          <div className="flex items-center gap-2 text-sm font-semibold text-gray-200">
             <MessageSquare size={16} /> AI 写作助手
           </div>
-          <button onClick={onClose} className="p-1 hover:bg-gray-100 rounded text-gray-400">
+          <button onClick={onClose} className="p-1 hover:bg-gray-800 rounded text-gray-500">
             <X size={16} />
           </button>
         </div>
 
         <div className="flex-1 overflow-y-auto p-4 space-y-3">
           {messages.length === 0 && (
-            <div className="text-center text-gray-400 text-sm py-12">
+            <div className="text-center text-gray-500 text-sm py-12">
               <MessageSquare size={32} className="mx-auto mb-2 opacity-30" />
               <p>AI 世界观构建助手</p>
               <p className="mt-1">可以问我：设计角色、构建势力、完善设定等</p>
@@ -78,7 +78,7 @@ export function AIAssistDialog({ isOpen, onClose, storyId }: AIAssistDialogProps
                 className={`max-w-[90%] rounded-xl px-3 py-2 text-sm leading-relaxed whitespace-pre-wrap ${
                   msg.role === 'user'
                     ? 'bg-blue-600 text-white'
-                    : 'bg-gray-100 text-gray-700'
+                    : 'bg-gray-800 text-gray-200'
                 }`}
               >
                 {msg.content || (msg.role === 'assistant' && isStreaming && i === messages.length - 1 ? (
@@ -97,13 +97,13 @@ export function AIAssistDialog({ isOpen, onClose, storyId }: AIAssistDialogProps
           <div ref={chatEndRef} />
         </div>
 
-        <div className="border-t border-gray-100 p-3 flex gap-2">
+        <div className="border-t border-gray-800 p-3 flex gap-2">
           <input
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && !e.shiftKey && sendMessage()}
             placeholder="问 AI 关于世界观的问题..."
-            className="flex-1 bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 text-sm outline-none focus:border-blue-500"
+            className="flex-1 bg-gray-900 border border-gray-800 rounded-lg px-3 py-2 text-sm outline-none focus:border-blue-500"
             disabled={isStreaming}
           />
           <button

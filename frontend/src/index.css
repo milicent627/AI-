@@ -13,6 +13,7 @@ body {
   line-height: 2;
   font-size: 16px;
   font-family: "Noto Serif SC", "Source Han Serif SC", "SimSun", serif;
+  color: #d1d5db;
 }
 
 .tiptap-editor .ProseMirror p {
@@ -42,7 +43,7 @@ body {
 }
 
 .tiptap-editor .ProseMirror p.is-editor-empty:first-child::before {
-  color: #adb5bd;
+  color: #6b7280;
   content: attr(data-placeholder);
   float: left;
   height: 0;

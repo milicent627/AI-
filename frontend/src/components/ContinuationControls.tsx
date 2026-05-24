@@ -63,16 +63,16 @@ export function ContinuationControls({
   };
 
   return (
-    <div className="border-t border-gray-200 p-4 shrink-0">
+    <div className="border-t border-gray-800 p-4 shrink-0">
       <div className="flex items-center gap-2 mb-2">
-        <span className="text-xs text-gray-400 shrink-0">
+        <span className="text-xs text-gray-500 shrink-0">
           {wordCount.toLocaleString()} 字
         </span>
         <div className="flex-1" />
         <select
           value={targetWords}
           onChange={(e) => setTargetWords(Number(e.target.value))}
-          className="bg-gray-50 border border-gray-200 rounded-lg px-2 py-1.5 text-xs text-gray-600"
+          className="bg-gray-900 border border-gray-800 rounded-lg px-2 py-1.5 text-xs text-gray-300"
           disabled={isStreaming}
         >
           <option value={300}>300字</option>
@@ -88,7 +88,7 @@ export function ContinuationControls({
           value={instruction}
           onChange={(e) => setInstruction(e.target.value)}
           placeholder="续写指令（如：主角遇到了一个神秘老人）"
-          className="flex-1 bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 text-sm outline-none focus:border-blue-500 text-gray-700"
+          className="flex-1 bg-gray-900 border border-gray-800 rounded-lg px-3 py-2 text-sm outline-none focus:border-blue-500 text-gray-200"
           disabled={isStreaming}
         />
       </div>
@@ -104,8 +104,8 @@ export function ContinuationControls({
 
         <button
           onClick={() => setShowAdvanced(!showAdvanced)}
-          className={`flex items-center gap-1 px-3 py-2 text-xs border rounded-lg hover:bg-gray-50 transition-colors ${
-            showAdvanced ? 'border-blue-300 text-blue-600 bg-blue-50' : 'border-gray-200 text-gray-500'
+          className={`flex items-center gap-1 px-3 py-2 text-xs border rounded-lg hover:bg-gray-800 transition-colors ${
+            showAdvanced ? 'border-blue-400 text-blue-400 bg-blue-900/30' : 'border-gray-800 text-gray-400'
           }`}
         >
           {showAdvanced ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
@@ -117,19 +117,19 @@ export function ContinuationControls({
         <button
           onClick={onPolish}
           disabled={isStreaming || !hasContent}
-          className="flex items-center gap-2 px-4 py-2 border border-gray-200 rounded-lg hover:bg-gray-50 disabled:opacity-50 text-sm text-gray-600"
+          className="flex items-center gap-2 px-4 py-2 border border-gray-800 rounded-lg hover:bg-gray-800 disabled:opacity-50 text-sm text-gray-300"
         >
           <Wand2 size={14} /> 润色
         </button>
       </div>
 
       {showAdvanced && (
-        <div className="flex gap-2 mt-2 pt-2 border-t border-gray-100">
+        <div className="flex gap-2 mt-2 pt-2 border-t border-gray-800">
           <input
             value={direction}
             onChange={(e) => setDirection(e.target.value)}
             placeholder="定向方向（可选）"
-            className="flex-1 bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 text-sm outline-none focus:border-purple-500 text-gray-700"
+            className="flex-1 bg-gray-900 border border-gray-800 rounded-lg px-3 py-2 text-sm outline-none focus:border-purple-500 text-gray-200"
             disabled={isStreaming}
           />
           <button
