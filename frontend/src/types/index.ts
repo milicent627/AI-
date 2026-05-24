@@ -100,13 +100,14 @@ export interface Foreshadowing {
 export interface ModelConfig {
   id: string;
   name: string;
-  provider: 'openai' | 'anthropic' | 'deepseek' | 'ollama';
+  provider: string;
   model_id: string;
   role: 'continuation' | 'polishing' | 'small_summary' | 'large_summary' | 'world_analysis' | 'foreshadowing';
   temperature: number;
   max_tokens: number;
   is_active: boolean;
   api_key: string;
+  base_url?: string;
 }
 
 export interface PromptFragment {

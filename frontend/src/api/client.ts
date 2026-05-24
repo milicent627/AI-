@@ -214,12 +214,19 @@ export const api = {
     request<any>(`/stories/${storyId}/order`, { method: 'PUT', body: JSON.stringify({ function: func, items }) }),
   seedOrder: (storyId: string, func: string) =>
     request<any>(`/stories/${storyId}/order/seed`, { method: 'POST', body: JSON.stringify({ function: func }) }),
+  previewOrder: (storyId: string, func: string) =>
+    request<{ messages: any[] }>(`/stories/${storyId}/order/${func}/preview`),
 
   // Models
   listModels: () => request<{ models: any[] }>('/models/'),
   createModel: (data: any) => request<any>('/models/', { method: 'POST', body: JSON.stringify(data) }),
   updateModel: (id: string, data: any) => request<any>(`/models/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
   deleteModel: (id: string) => request<any>(`/models/${id}`, { method: 'DELETE' }),
+  listProviderModels: (provider: string, api_key: string, base_url?: string) =>
+    request<{ models: string[] }>('/models/list-provider-models', { method: 'POST', body: JSON.stringify({ provider, api_key, base_url }) }),
+  listBundles: () => request<{ bundles: any[] }>('/models/bundles'),
+  saveBundle: (data: any) => request<any>('/models/bundle', { method: 'POST', body: JSON.stringify(data) }),
+  deleteBundle: (name: string) => request<any>(`/models/bundle/${encodeURIComponent(name)}`, { method: 'DELETE' }),
 
   // Prompt Presets
   listPromptPresets: (role?: string) => request<{ presets: any[] }>(`/prompt-presets/${role ? `?role=${role}` : ''}`),

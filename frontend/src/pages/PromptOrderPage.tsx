@@ -3,7 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { api } from '../api/client';
 import {
   ArrowLeft, Save, GripVertical, ChevronUp, ChevronDown,
-  Eye, EyeOff, Plus, Trash2, Sparkles, Wand2, FileText, RefreshCw
+  Eye, EyeOff, Plus, Trash2, Sparkles, Wand2, FileText, RefreshCw, X, MessageSquare
 } from 'lucide-react';
 
 const FUNCTION_LABELS: Record<string, string> = {
@@ -42,6 +42,25 @@ export default function PromptOrderPage() {
   const [editNumVal, setEditNumVal] = useState('');
   const [editTriggerId, setEditTriggerId] = useState<string | null>(null);
   const [editTriggerVal, setEditTriggerVal] = useState('');
+
+  const [showPreview, setShowPreview] = useState(false);
+  const [previewMessages, setPreviewMessages] = useState<any[]>([]);
+  const [previewLoading, setPreviewLoading] = useState(false);
+
+  const handlePreview = async () => {
+    if (!storyId) return;
+    setPreviewLoading(true);
+    setShowPreview(true);
+    try {
+      const data = await api.previewOrder(storyId, func);
+      setPreviewMessages(data.messages || []);
+    } catch (err: any) {
+      alert(`获取预览失败: ${err.message}`);
+      setPreviewMessages([]);
+    } finally {
+      setPreviewLoading(false);
+    }
+  };
 
   const loadOrder = useCallback(async () => {
     if (!storyId) return;
@@ -213,6 +232,13 @@ export default function PromptOrderPage() {
           </span>
         </div>
         <div className="flex items-center gap-2">
+          <button
+            onClick={handlePreview}
+            className="flex items-center gap-1 px-3 py-1.5 text-xs bg-purple-700/60 border border-purple-700 rounded hover:bg-purple-700 transition-colors"
+            title="查看组装后的完整提示词"
+          >
+            <MessageSquare size={13} /> 查看提示词
+          </button>
           <button
             onClick={handleSeed}
             className="flex items-center gap-1 px-3 py-1.5 text-xs bg-amber-700/60 border border-amber-700 rounded hover:bg-amber-700 transition-colors"
@@ -451,6 +477,46 @@ export default function PromptOrderPage() {
           )}
         </div>
       </main>
+
+      {/* Preview Modal */}
+      {showPreview && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70" onClick={() => setShowPreview(false)}>
+          <div className="bg-gray-900 border border-gray-700 rounded-xl w-[900px] max-h-[85vh] flex flex-col shadow-2xl" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between px-5 py-3 border-b border-gray-800 shrink-0">
+              <div className="flex items-center gap-2">
+                <MessageSquare size={16} className="text-purple-400" />
+                <h2 className="font-bold text-sm">组装后的提示词 — {FUNCTION_LABELS[func] || func}</h2>
+                <span className="text-xs text-gray-600">{previewMessages.length} 条消息</span>
+              </div>
+              <button onClick={() => setShowPreview(false)} className="p-1 hover:bg-gray-800 rounded text-gray-400 hover:text-gray-200">
+                <X size={18} />
+              </button>
+            </div>
+            <div className="overflow-y-auto p-5 space-y-4 flex-1">
+              {previewLoading ? (
+                <div className="text-center text-gray-500 py-12">加载中...</div>
+              ) : previewMessages.length === 0 ? (
+                <div className="text-center text-gray-500 py-12">暂无提示词数据</div>
+              ) : (
+                previewMessages.map((msg, i) => (
+                  <div key={i} className="bg-gray-950 border border-gray-800 rounded-lg overflow-hidden">
+                    <div className="flex items-center gap-2 px-4 py-2 bg-gray-900 border-b border-gray-800">
+                      <span className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded ${msg.role === 'system' ? 'bg-blue-900/60 text-blue-300' : 'bg-green-900/60 text-green-300'}`}>
+                        {msg.role}
+                      </span>
+                      <span className={`text-[10px] px-1.5 py-0.5 rounded border ${getTypeColor(msg.item_type)}`}>
+                        {getTypeLabel(msg.item_type)}
+                      </span>
+                      <span className="text-xs text-gray-300 truncate">{msg.name}</span>
+                    </div>
+                    <pre className="p-4 text-sm text-gray-300 whitespace-pre-wrap break-words font-mono leading-relaxed max-h-64 overflow-y-auto">{msg.content}</pre>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

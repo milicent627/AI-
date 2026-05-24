@@ -2,13 +2,7 @@ import { useEffect, useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { api } from '../api/client';
 import type { ModelConfig, PromptPreset } from '../types';
-import { ArrowLeft, Plus, Trash2, Check, Save, Copy, ChevronDown, ChevronUp, GripVertical, EyeOff, Eye, Download, Upload } from 'lucide-react';
-
-const PROVIDERS = [
-  { value: 'openai', label: 'OpenAI', models: ['gpt-4o', 'gpt-4o-mini', 'gpt-4-turbo', 'gpt-3.5-turbo'] },
-  { value: 'anthropic', label: 'Anthropic', models: ['claude-sonnet-4-20250514', 'claude-3-5-sonnet-20241022', 'claude-3-5-haiku-20241022', 'claude-3-opus-20240229'] },
-  { value: 'deepseek', label: 'DeepSeek', models: ['deepseek-chat', 'deepseek-reasoner'] },
-];
+import { ArrowLeft, Plus, Trash2, Check, Save, Copy, ChevronDown, ChevronUp, ChevronRight, GripVertical, EyeOff, Eye, Download, Upload, RefreshCw } from 'lucide-react';
 
 const ROLES = [
   { value: 'continuation', label: '续写模型' },
@@ -33,14 +27,16 @@ export default function SettingsPage() {
   const navigate = useNavigate();
   const [tab, setTab] = useState<'models' | 'prompts'>('models');
 
-  // Model state
-  const [models, setModels] = useState<ModelConfig[]>([]);
-  const [presets, setPresets] = useState<ModelConfig[]>([]);
-  const [editing, setEditing] = useState<ModelConfig | null>(null);
-  const [form, setForm] = useState({
-    name: '', provider: 'openai', model_id: '', api_key: '', base_url: '',
-    role: 'continuation', temperature: 0.8, max_tokens: 4096, is_active: true,
-  });
+  // Model bundle state
+  const [bundles, setBundles] = useState<any[]>([]);
+  const [editingName, setEditingName] = useState<string | null>(null);
+  const [bundleForm, setBundleForm] = useState({ name: '', api_key: '', base_url: '' });
+  const [formRoles, setFormRoles] = useState<Record<string, { model_id: string; temperature: number; max_tokens: number }>>(
+    Object.fromEntries(ROLES.map(r => [r.value, { model_id: '', temperature: 0.8, max_tokens: 4096 }]))
+  );
+  const [fetchedModels, setFetchedModels] = useState<string[] | null>(null);
+  const [fetchingModels, setFetchingModels] = useState(false);
+  const [expandedBundle, setExpandedBundle] = useState<string | null>(null);
 
   // Prompt preset state
   const [promptPresets, setPromptPresets] = useState<PromptPreset[]>([]);
@@ -54,58 +50,73 @@ export default function SettingsPage() {
   const [editPresetNameVal, setEditPresetNameVal] = useState('');
 
   useEffect(() => {
-    api.listModels().then(d => {
-      setModels((d.models || []).filter((m: any) => !m.is_preset));
-      setPresets((d.models || []).filter((m: any) => m.is_preset));
-    }).catch(console.error);
+    refreshBundles();
     api.listPromptPresets().then(d => setPromptPresets(d.presets || [])).catch(console.error);
   }, []);
 
-  // --- Model handlers ---
-  const saveModel = async () => {
-    if (!form.name || !form.api_key) { alert('请填写模型名称和 API Key'); return; }
-    if (editing) await api.updateModel(editing.id, form);
-    else await api.createModel(form);
-    await refreshModels();
-    setEditing(null);
-    resetForm();
+  // --- Bundle handlers ---
+  const refreshBundles = async () => {
+    try {
+      const d = await api.listBundles();
+      setBundles(d.bundles || []);
+    } catch (e) {
+      // fallback: load individual models and group manually
+      const d = await api.listModels();
+      const nonPresets = (d.models || []).filter((m: any) => !m.is_preset);
+      const map: Record<string, any> = {};
+      for (const m of nonPresets) {
+        if (!map[m.name]) map[m.name] = { name: m.name, api_key: m.api_key, base_url: m.base_url || '', roles: {} };
+        if (m.api_key && !map[m.name].api_key) map[m.name].api_key = m.api_key;
+        if (m.base_url && !map[m.name].base_url) map[m.name].base_url = m.base_url;
+        map[m.name].roles[m.role] = { id: m.id, model_id: m.model_id, temperature: m.temperature, max_tokens: m.max_tokens, is_active: m.is_active };
+      }
+      setBundles(Object.values(map));
+    }
   };
 
-  const saveAsPreset = async () => {
-    if (!form.name) { alert('请填写名称'); return; }
-    await api.createModel({ ...form, api_key: '', is_preset: true });
-    await refreshModels();
-    resetForm();
+  const resetBundleForm = () => {
+    setBundleForm({ name: '', api_key: '', base_url: '' });
+    setFormRoles(Object.fromEntries(ROLES.map(r => [r.value, { model_id: '', temperature: 0.8, max_tokens: 4096 }])));
+    setEditingName(null);
+    setFetchedModels(null);
   };
 
-  const loadFromPreset = (preset: ModelConfig) => {
-    setForm({
-      name: preset.name, provider: preset.provider, model_id: preset.model_id,
-      api_key: '', base_url: preset.base_url || '',
-      role: preset.role, temperature: preset.temperature, max_tokens: preset.max_tokens, is_active: true,
-    });
-    setEditing(null);
+  const editBundle = (bundle: any) => {
+    setEditingName(bundle.name);
+    setBundleForm({ name: bundle.name, api_key: bundle.api_key || '', base_url: bundle.base_url || '' });
+    const roles: Record<string, any> = {};
+    for (const r of ROLES) {
+      const rc = bundle.roles[r.value];
+      roles[r.value] = rc ? { model_id: rc.model_id, temperature: rc.temperature, max_tokens: rc.max_tokens } : { model_id: '', temperature: 0.8, max_tokens: 4096 };
+    }
+    setFormRoles(roles);
   };
 
-  const editModel = (m: ModelConfig) => {
-    setEditing(m);
-    setForm({ name: m.name, provider: m.provider, model_id: m.model_id, api_key: m.api_key, base_url: '', role: m.role, temperature: m.temperature, max_tokens: m.max_tokens, is_active: m.is_active });
+  const saveBundle = async () => {
+    if (!bundleForm.name) { alert('请填写名称'); return; }
+    await api.saveBundle({ ...bundleForm, roles: formRoles });
+    await refreshBundles();
+    resetBundleForm();
   };
 
-  const deleteModel = async (id: string) => {
-    if (!confirm('确定删除？')) return;
-    await api.deleteModel(id);
-    await refreshModels();
+  const deleteBundle = async (name: string) => {
+    if (!confirm(`确定删除模型组 "${name}" 吗？这将删除所有6个模型配置。`)) return;
+    await api.deleteBundle(name);
+    await refreshBundles();
   };
 
-  const refreshModels = async () => {
-    const d = await api.listModels();
-    setModels((d.models || []).filter((m: any) => !m.is_preset));
-    setPresets((d.models || []).filter((m: any) => m.is_preset));
-  };
-
-  const resetForm = () => {
-    setForm({ name: '', provider: 'openai', model_id: '', api_key: '', base_url: '', role: 'continuation', temperature: 0.8, max_tokens: 4096, is_active: true });
+  const handleFetchModels = async () => {
+    if (!bundleForm.api_key || !bundleForm.base_url) { alert('请先填写 API Key 和 API URL'); return; }
+    setFetchingModels(true);
+    setFetchedModels(null);
+    try {
+      const result = await api.listProviderModels('custom', bundleForm.api_key, bundleForm.base_url);
+      setFetchedModels(result.models);
+    } catch (err: any) {
+      alert(`获取模型列表失败: ${err.message}`);
+    } finally {
+      setFetchingModels(false);
+    }
   };
 
   // --- Prompt handlers ---
@@ -154,8 +165,6 @@ export default function SettingsPage() {
     e.target.value = '';
   };
 
-  const providerModels = PROVIDERS.find(p => p.value === form.provider)?.models || [];
-
   return (
     <div className="flex-1 flex flex-col max-w-3xl mx-auto w-full p-6">
       <input type="file" ref={promptImportRef} onChange={handlePromptImport} accept=".json" className="hidden" />
@@ -171,113 +180,143 @@ export default function SettingsPage() {
 
       {tab === 'models' && (
         <>
-          {/* Model form */}
+          {/* Bundle form */}
           <div className="bg-gray-900 border border-gray-800 rounded-xl p-5 mb-6">
-            <h2 className="font-bold mb-4">{editing ? '编辑模型' : '添加新模型'}</h2>
-            <div className="grid grid-cols-2 gap-3">
+            <h2 className="font-bold mb-4">{editingName ? `编辑: ${editingName}` : '添加模型组'}</h2>
+            <p className="text-xs text-gray-500 mb-4">一个模型组包含全部 6 个用途的配置。填入 API 连接信息后为每个用途指定模型和参数。</p>
+
+            {/* Shared credentials */}
+            <div className="grid grid-cols-3 gap-3 mb-4">
               <div>
                 <label className="text-xs text-gray-500">名称</label>
-                <input className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm mt-1" placeholder="例如：主力续写"
-                  value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} />
+                <input className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm mt-1"
+                  placeholder="例如：GPT-4o" value={bundleForm.name}
+                  onChange={e => setBundleForm({ ...bundleForm, name: e.target.value })} />
               </div>
               <div>
-                <label className="text-xs text-gray-500">用途</label>
-                <select className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm mt-1" value={form.role}
-                  onChange={e => setForm({ ...form, role: e.target.value })}>
-                  {ROLES.map(r => <option key={r.value} value={r.value}>{r.label}</option>)}
-                </select>
-              </div>
-              <div>
-                <label className="text-xs text-gray-500">提供商</label>
-                <select className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm mt-1" value={form.provider}
-                  onChange={e => setForm({ ...form, provider: e.target.value, model_id: '' })}>
-                  {PROVIDERS.map(p => <option key={p.value} value={p.value}>{p.label}</option>)}
-                </select>
-              </div>
-              <div>
-                <label className="text-xs text-gray-500">模型</label>
-                <select className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm mt-1" value={form.model_id}
-                  onChange={e => setForm({ ...form, model_id: e.target.value })}>
-                  <option value="">选择模型...</option>
-                  {providerModels.map(m => <option key={m} value={m}>{m}</option>)}
-                  <option value="custom">自定义...</option>
-                </select>
-              </div>
-              <div className="col-span-2">
                 <label className="text-xs text-gray-500">API Key</label>
                 <input type="password" className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm mt-1 font-mono"
-                  placeholder="sk-..." value={form.api_key} onChange={e => setForm({ ...form, api_key: e.target.value })} />
+                  placeholder="sk-..." value={bundleForm.api_key}
+                  onChange={e => setBundleForm({ ...bundleForm, api_key: e.target.value })} />
               </div>
               <div>
-                <label className="text-xs text-gray-500">Temperature ({form.temperature})</label>
-                <input type="range" min="0" max="2" step="0.1" className="w-full mt-1"
-                  value={form.temperature} onChange={e => setForm({ ...form, temperature: parseFloat(e.target.value) })} />
-              </div>
-              <div>
-                <label className="text-xs text-gray-500">Max Tokens</label>
-                <input type="number" className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm mt-1"
-                  value={form.max_tokens} onChange={e => setForm({ ...form, max_tokens: parseInt(e.target.value) || 4096 })} />
+                <label className="text-xs text-gray-500">API URL</label>
+                <input type="text" className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm mt-1 font-mono"
+                  placeholder="https://api.openai.com" value={bundleForm.base_url}
+                  onChange={e => setBundleForm({ ...bundleForm, base_url: e.target.value })} />
               </div>
             </div>
-            <div className="flex gap-2 mt-4 justify-end">
-              {editing && <button onClick={() => { setEditing(null); resetForm(); }} className="px-4 py-1.5 border border-gray-700 rounded-lg text-sm hover:bg-gray-800">取消</button>}
-              <button onClick={saveAsPreset} className="flex items-center gap-1 px-3 py-1.5 border border-gray-600 rounded-lg text-sm hover:bg-gray-800">
-                <Save size={14} /> 存为预设
+
+            {/* Fetch models button */}
+            <div className="flex items-center gap-2 mb-4">
+              <button onClick={handleFetchModels}
+                disabled={fetchingModels || !bundleForm.api_key || !bundleForm.base_url}
+                className="flex items-center gap-1 px-3 py-1 text-xs bg-gray-700 border border-gray-600 rounded-lg hover:bg-gray-600 disabled:opacity-40 disabled:cursor-not-allowed">
+                <RefreshCw size={12} className={fetchingModels ? 'animate-spin' : ''} />
+                获取模型列表
               </button>
-              <button onClick={saveModel} className="flex items-center gap-1 px-4 py-1.5 bg-blue-600 rounded-lg text-sm font-medium hover:bg-blue-700">
-                <Check size={14} /> {editing ? '更新' : '添加'}
+              {fetchedModels && <span className="text-xs text-gray-500">{fetchedModels.length} 个可用模型</span>}
+            </div>
+
+            {/* Per-role configs */}
+            <div className="space-y-2">
+              {ROLES.map(r => {
+                const role = formRoles[r.value] || { model_id: '', temperature: 0.8, max_tokens: 4096 };
+                return (
+                  <div key={r.value} className="flex items-center gap-2 bg-gray-950 rounded-lg px-3 py-2">
+                    <span className="text-xs text-gray-400 w-28 shrink-0">{r.label}</span>
+                    {fetchedModels ? (
+                      <select className="flex-1 bg-gray-800 border border-gray-700 rounded px-2 py-1 text-xs"
+                        value={role.model_id}
+                        onChange={e => {
+                          const v = e.target.value;
+                          setFormRoles(prev => ({ ...prev, [r.value]: { ...prev[r.value], model_id: v === '__custom__' ? '' : v } }));
+                        }}>
+                        <option value="">默认</option>
+                        {fetchedModels.map(m => <option key={m} value={m}>{m}</option>)}
+                        <option value="__custom__">自定义...</option>
+                      </select>
+                    ) : (
+                      <input type="text" className="flex-1 bg-gray-800 border border-gray-700 rounded px-2 py-1 text-xs font-mono"
+                        placeholder="模型 ID，如 gpt-4o"
+                        value={role.model_id}
+                        onChange={e => setFormRoles(prev => ({ ...prev, [r.value]: { ...prev[r.value], model_id: e.target.value } }))} />
+                    )}
+                    <div className="flex items-center gap-1 shrink-0">
+                      <span className="text-xs text-gray-600">T</span>
+                      <input type="number" className="w-12 bg-gray-800 border border-gray-700 rounded px-1 py-0.5 text-xs text-center"
+                        value={role.temperature} step="0.1" min="0" max="2"
+                        onChange={e => setFormRoles(prev => ({ ...prev, [r.value]: { ...prev[r.value], temperature: parseFloat(e.target.value) || 0.8 } }))} />
+                    </div>
+                    <div className="flex items-center gap-1 shrink-0">
+                      <span className="text-xs text-gray-600">MT</span>
+                      <input type="number" className="w-16 bg-gray-800 border border-gray-700 rounded px-1 py-0.5 text-xs text-center"
+                        value={role.max_tokens} step="100"
+                        onChange={e => setFormRoles(prev => ({ ...prev, [r.value]: { ...prev[r.value], max_tokens: parseInt(e.target.value) || 4096 } }))} />
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            <div className="flex gap-2 mt-4 justify-end">
+              {editingName && <button onClick={resetBundleForm} className="px-4 py-1.5 border border-gray-700 rounded-lg text-sm hover:bg-gray-800">取消</button>}
+              <button onClick={saveBundle} className="flex items-center gap-1 px-4 py-1.5 bg-blue-600 rounded-lg text-sm font-medium hover:bg-blue-700">
+                <Check size={14} /> {editingName ? '更新' : '保存模型组'}
               </button>
             </div>
           </div>
 
-          {/* Model presets */}
-          {presets.length > 0 && (
-            <div className="mb-6">
-              <h2 className="font-bold text-sm text-gray-400 uppercase tracking-wider mb-3">模型预设</h2>
-              <div className="space-y-2">
-                {presets.map(p => (
-                  <div key={p.id} className="bg-gray-900 border border-gray-800 rounded-lg p-3 flex items-center justify-between group">
-                    <div>
-                      <div className="flex items-center gap-2">
-                        <span className="font-medium text-sm">{p.name}</span>
-                        <span className="text-xs text-gray-600">{ROLES.find(r => r.value === p.role)?.label}</span>
-                      </div>
-                      <div className="text-xs text-gray-500 mt-0.5">{p.provider} — {p.model_id || '(未选模型)'}</div>
-                    </div>
-                    <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                      <button onClick={() => loadFromPreset(p)} className="flex items-center gap-1 px-2 py-1 text-xs bg-green-700 rounded hover:bg-green-600">
-                        <Copy size={12} /> 加载
-                      </button>
-                      <button onClick={() => deleteModel(p.id)} className="p-1 hover:bg-red-900/50 rounded text-red-400"><Trash2 size={14} /></button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* Active models */}
+          {/* Bundle list */}
           <div className="space-y-3">
-            <h2 className="font-bold text-sm text-gray-400 uppercase tracking-wider">已配置的模型</h2>
-            {models.map(m => (
-              <div key={m.id} className="bg-gray-900 border border-gray-800 rounded-lg p-4 flex items-center justify-between group">
-                <div>
-                  <div className="flex items-center gap-2">
-                    <span className="font-medium">{m.name}</span>
-                    {m.is_active && <span className="text-xs bg-green-900/50 text-green-400 px-1.5 py-0.5 rounded">活跃</span>}
-                    <span className="text-xs text-gray-600">{ROLES.find(r => r.value === m.role)?.label}</span>
+            <h2 className="font-bold text-sm text-gray-400 uppercase tracking-wider">已配置的模型组</h2>
+            {bundles.map((b: any) => {
+              const isExpanded = expandedBundle === b.name;
+              const roleCount = Object.keys(b.roles || {}).length;
+              return (
+                <div key={b.name} className="bg-gray-900 border border-gray-800 rounded-lg overflow-hidden">
+                  <div className="p-3 flex items-center justify-between cursor-pointer hover:bg-gray-850 group"
+                    onClick={() => setExpandedBundle(isExpanded ? null : b.name)}>
+                    <div className="flex items-center gap-2">
+                      {isExpanded ? <ChevronDown size={14} className="text-gray-500" /> : <ChevronRight size={14} className="text-gray-600" />}
+                      <span className="font-medium">{b.name}</span>
+                      <span className="text-xs text-gray-600">{roleCount}/6 个用途已配置</span>
+                    </div>
+                    <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity" onClick={e => e.stopPropagation()}>
+                      <button onClick={() => editBundle(b)} className="p-1 hover:bg-gray-800 rounded text-gray-400">✏️</button>
+                      <button onClick={() => deleteBundle(b.name)} className="p-1 hover:bg-red-900/50 rounded text-red-400"><Trash2 size={14} /></button>
+                    </div>
                   </div>
-                  <div className="text-xs text-gray-500 mt-0.5">{m.provider} — {m.model_id}</div>
+                  {isExpanded && (
+                    <div className="border-t border-gray-800 px-4 py-2 space-y-1">
+                      <div className="text-xs text-gray-600 mb-1">
+                        {b.base_url && <span>API: {b.base_url}</span>}
+                      </div>
+                      {ROLES.map(r => {
+                        const rc = b.roles[r.value];
+                        return (
+                          <div key={r.value} className="flex items-center gap-2 text-xs">
+                            <span className="text-gray-400 w-28">{r.label}</span>
+                            {rc ? (
+                              <>
+                                <span className="text-gray-300 font-mono">{rc.model_id || '(默认)'}</span>
+                                <span className="text-gray-600">T: {rc.temperature}</span>
+                                <span className="text-gray-600">MT: {rc.max_tokens}</span>
+                              </>
+                            ) : (
+                              <span className="text-gray-700">未配置</span>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
                 </div>
-                <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                  <button onClick={() => editModel(m)} className="p-1.5 hover:bg-gray-800 rounded text-gray-400">✏️</button>
-                  <button onClick={() => deleteModel(m.id)} className="p-1.5 hover:bg-red-900/50 rounded text-red-400"><Trash2 size={14} /></button>
-                </div>
-              </div>
-            ))}
-            {models.length === 0 && (
+              );
+            })}
+            {bundles.length === 0 && (
               <p className="text-gray-600 text-sm p-4 text-center border border-dashed border-gray-800 rounded-lg">
-                还没有配置任何模型
+                还没有配置任何模型组 — 请在上方添加
               </p>
             )}
           </div>

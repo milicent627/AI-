@@ -1,14 +1,10 @@
 from .base import BaseProvider
 from .openai_provider import OpenAIProvider
-from .anthropic_provider import AnthropicProvider
-from .deepseek_provider import DeepSeekProvider
 from ..models.model_config import ProviderType, ModelConfig
 
 
 PROVIDER_MAP = {
-    ProviderType.openai: OpenAIProvider,
-    ProviderType.anthropic: AnthropicProvider,
-    ProviderType.deepseek: DeepSeekProvider,
+    ProviderType.custom: OpenAIProvider,
 }
 
 

@@ -204,3 +204,72 @@ class PromptAssembler:
         if logic == "all":
             return all(w in text for w in trigger_words)
         return any(w in text for w in trigger_words)
+
+    async def preview(
+        self, story_session, index_session, story_id: str, function: str,
+    ) -> list:
+        """Return assembled messages with name/type metadata for preview display."""
+        from app.models.prompt_fragment import PromptFragment
+
+        stmt = (
+            select(PromptOrderItem)
+            .where(
+                PromptOrderItem.story_id == story_id,
+                PromptOrderItem.function == function,
+            )
+            .order_by(PromptOrderItem.sort_order)
+        )
+        result = await story_session.execute(stmt)
+        items = result.scalars().all()
+
+        messages = []
+        for item in items:
+            if not item.is_active:
+                continue
+
+            name = item.source_id
+            if item.item_type == "fragment":
+                content = await self._resolve_fragment(index_session, item.source_id)
+                if content is None:
+                    continue
+                # Try to get fragment name from the preset
+                frag_result = await index_session.execute(
+                    select(PromptFragment).where(PromptFragment.id == item.source_id)
+                )
+                frag = frag_result.scalar_one_or_none()
+                name = frag.preset_id if frag else item.source_id
+            elif item.item_type == "world_entry":
+                content = await self._resolve_world_entry(story_session, item, {})
+                if content is None:
+                    continue
+                entry_result = await story_session.execute(
+                    select(WorldBookEntry).where(WorldBookEntry.id == item.source_id)
+                )
+                entry = entry_result.scalar_one_or_none()
+                name = entry.name if entry else item.source_id
+            elif item.item_type == "summary":
+                content = await self._resolve_summary(story_session, story_id, item.source_id)
+                if content is None:
+                    continue
+                name = "摘要" if item.source_id == "small_summaries" else "大摘要"
+            elif item.item_type == "foreshadowing":
+                content = await self._resolve_foreshadowing(story_session, story_id)
+                if content is None:
+                    continue
+                name = "伏笔列表"
+            elif item.item_type == "style_guide":
+                content = await self._resolve_style_guide(story_session, story_id)
+                if content is None:
+                    continue
+                name = "风格指南"
+            else:
+                continue
+
+            messages.append({
+                "role": item.role,
+                "name": name,
+                "item_type": item.item_type,
+                "content": content,
+            })
+
+        return messages

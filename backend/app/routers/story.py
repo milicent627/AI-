@@ -419,3 +419,24 @@ async def seed_order(story_id: str, request: Request):
             return {"ok": True, "count": len(items_to_add)}
     finally:
         await engine.dispose()
+
+
+@router.get("/{story_id}/order/{function}/preview")
+async def preview_order(story_id: str, function: str):
+    """Return the assembled prompt messages with metadata for preview."""
+    from ..services.prompt_assembler import PromptAssembler
+
+    engine = create_engine(
+        str(Path(settings.data_dir) / "archives" / story_id / "database.sqlite"))
+    session_factory = create_session_factory(engine)
+    index_engine = create_engine(
+        str(Path(settings.data_dir) / "index.sqlite"))
+    index_factory = create_session_factory(index_engine)
+    try:
+        async with session_factory() as db, index_factory() as idb:
+            assembler = PromptAssembler()
+            messages = await assembler.preview(db, idb, story_id, function)
+            return {"messages": messages}
+    finally:
+        await engine.dispose()
+        await index_engine.dispose()

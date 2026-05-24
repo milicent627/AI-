@@ -7,10 +7,12 @@ import enum
 
 
 class ProviderType(str, enum.Enum):
+    # legacy values kept for backward compatibility with existing DB records
     openai = "openai"
     anthropic = "anthropic"
     deepseek = "deepseek"
     ollama = "ollama"
+    custom = "custom"
 
 
 class ModelRole(str, enum.Enum):
