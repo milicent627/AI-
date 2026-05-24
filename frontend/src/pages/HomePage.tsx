@@ -27,8 +27,12 @@ export default function HomePage() {
   const deleteStory = async (e: React.MouseEvent, id: string) => {
     e.stopPropagation();
     if (!confirm('确定要删除这个故事吗？此操作不可撤消。')) return;
-    await api.deleteStory(id);
-    setStories(stories.filter(s => s.id !== id));
+    try {
+      await api.deleteStory(id);
+      setStories(stories.filter(s => s.id !== id));
+    } catch (err: any) {
+      alert(`删除失败: ${err.message || '未知错误'}`);
+    }
   };
 
   return (

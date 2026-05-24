@@ -176,10 +176,27 @@ async def update_story(story_id: str, request: Request):
 async def delete_story(story_id: str):
     """Delete a story and all its data."""
     import shutil
+    import asyncio
+
     story_dir = Path(settings.data_dir) / "archives" / story_id
-    if story_dir.exists():
-        shutil.rmtree(str(story_dir))
-    return {"ok": True}
+    if not story_dir.exists():
+        raise HTTPException(status_code=404, detail="Story not found")
+
+    # Dispose any lingering DB connections before deleting (Windows file lock)
+    db_path = story_dir / "database.sqlite"
+    if db_path.exists():
+        engine = create_engine(str(db_path))
+        await engine.dispose()
+
+    for attempt in range(3):
+        try:
+            shutil.rmtree(str(story_dir))
+            return {"ok": True}
+        except PermissionError:
+            if attempt < 2:
+                await asyncio.sleep(0.5)
+            else:
+                raise HTTPException(status_code=500, detail="无法删除故事：文件被占用，请稍后重试")
 
 
 # ── Prompt Ordering ──────────────────────────────────────────────
